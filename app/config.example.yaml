@@ -1,35 +1,33 @@
 # heating-brain configuration
-# Copy this to config.yaml and edit for your setup
+# Copy this to /etc/heating-brain/config.yaml and edit for your setup.
 
 # -------------------------------------------------------------------
-# Location (for weather API)
+# Location (for Open-Meteo outdoor temperature)
 # -------------------------------------------------------------------
 location:
-  # Find your coordinates at https://www.openstreetmap.org — right-click, "Show address"
+  # Find your coordinates at https://www.openstreetmap.org — right-click "Show address"
   latitude: 51.5074
   longitude: -0.1278
   name: "London"
 
 # -------------------------------------------------------------------
-# Weather provider (Open-Meteo is free, keyless)
+# Weather provider (Open-Meteo is free and keyless)
 # -------------------------------------------------------------------
 weather:
   provider: open-meteo
-  # How often to fetch outdoor temp. Open-Meteo has no rate limit for personal use,
-  # but 10 minutes is plenty.
+  # How often to re-fetch outdoor temp. 10 minutes is plenty.
   poll_interval_seconds: 600
 
 # -------------------------------------------------------------------
 # Tado connection
 # -------------------------------------------------------------------
 tado:
-  # Path to persist the refresh token between restarts.
-  # First run will prompt you to visit a URL in a browser.
+  # Path to persist the OAuth2 refresh token between restarts.
+  # First run will print a URL — visit it in a browser to authenticate.
   token_file: /var/lib/heating-brain/tado_refresh_token
   # With Auto-Assist you get 20,000 calls/day.
-  # 60s = 1440 calls/day, well within budget and leaves headroom.
+  # 60s poll = ~1440 calls/day, well within budget.
   poll_interval_seconds: 60
-  # Hot water zone is not touched by this controller (heating only).
   # Leave null to auto-detect the HEATING zone on first run.
   zone_id: null
 
@@ -37,80 +35,96 @@ tado:
 # Control logic
 # -------------------------------------------------------------------
 control:
-  # If the weather brain decides "heat on", Tado is set to this target.
-  # If "heat off", we switch the zone off (manual overlay OFF).
+  # When heating is turned ON, Tado is set to this target temperature.
   heat_on_target_celsius: 20.0
 
-  # Hysteresis: how many degrees below/above the threshold before flipping state.
-  # This prevents the heating from rapid-cycling if the outdoor temp hovers at the
-  # threshold.
-  hysteresis_celsius: 0.5
-
-  # Minimum time (seconds) between state changes. Even if conditions say "flip",
-  # we won't change Tado more often than this.
+  # Minimum time (seconds) between state changes sent to Tado.
+  # Prevents rapid-cycling even if conditions flip quickly.
   min_state_change_interval_seconds: 600  # 10 minutes
 
-  # When we turn heating OFF, should we clear the overlay (return to Tado's own
-  # schedule) or set a hard manual-off? Options: "off" (manual off) or "auto" (clear).
+  # When we turn heating OFF: "off" = hard manual-off overlay,
+  # "auto" = clear overlay (returns to Tado's own schedule).
   off_behavior: "off"
 
-  # When we turn heating ON, for how long should the overlay last?
-  # Options:
-  #   MANUAL           - until we (or you) change it
-  #   NEXT_TIME_BLOCK  - until Tado's next scheduled change
-  #   TIMER            - for a fixed duration (set timer_minutes below)
+  # How long a heating-ON overlay should last.
+  # Options: MANUAL (until changed), NEXT_TIME_BLOCK, TIMER
   on_overlay_termination: "MANUAL"
   # Only used when on_overlay_termination == TIMER
   timer_minutes: 120
 
 # -------------------------------------------------------------------
-# Schedule — when the controller is ALLOWED to turn heating on
-# -------------------------------------------------------------------
-# Outside these windows the controller forces heating off regardless of
-# temperature. Within them, threshold logic applies.
+# Schedule — when the controller is ALLOWED to act on temperatures.
+# Outside these windows, heating is forced OFF unconditionally.
 #
-# Times are 24h local. Days: mon, tue, wed, thu, fri, sat, sun (or "all", "weekdays", "weekends")
+# Times are 24h local. Days: mon, tue, wed, thu, fri, sat, sun
+#   (or "all", "weekdays", "weekends")
+#
+# Four-threshold logic (ALL must be true to change state):
+#   Turn ON  when indoor < indoor_on_celsius  AND outdoor < outdoor_on_celsius
+#   Turn OFF when indoor > indoor_off_celsius AND outdoor > outdoor_off_celsius
+#   Otherwise: hold current state (natural deadband — no rapid cycling).
+#
+# Tip: set indoor_off > indoor_on and outdoor_off > outdoor_on
+#   to create a comfortable deadband (e.g. on@18/15, off@20/17).
+# -------------------------------------------------------------------
 schedule:
   - name: "Weekday mornings"
     days: weekdays
     start: "06:30"
     end:   "09:00"
-    # Threshold applies only within this window.
-    # If outdoor temp is below this, turn heat ON.
-    outdoor_threshold_celsius: 12.0
+    indoor_on_celsius:   18.0   # heat on if indoor < 18 AND outdoor < 15
+    outdoor_on_celsius:  15.0
+    indoor_off_celsius:  20.0   # heat off if indoor > 20 AND outdoor > 17
+    outdoor_off_celsius: 17.0
 
   - name: "Weekday evenings"
     days: weekdays
     start: "17:30"
     end:   "22:30"
-    outdoor_threshold_celsius: 14.0
+    indoor_on_celsius:   18.0
+    outdoor_on_celsius:  15.0
+    indoor_off_celsius:  20.0
+    outdoor_off_celsius: 17.0
 
   - name: "Weekend daytime"
     days: weekends
     start: "08:00"
     end:   "22:30"
-    outdoor_threshold_celsius: 13.0
+    indoor_on_celsius:   18.0
+    outdoor_on_celsius:  14.0
+    indoor_off_celsius:  21.0
+    outdoor_off_celsius: 16.0
 
 # Outside every window above, heating is forced OFF.
 
 # -------------------------------------------------------------------
-# HTTP API (for MagicMirror module and future ESP32)
+# HTTP API and web UI
 # -------------------------------------------------------------------
 http:
-  host: "0.0.0.0"  # bind to all interfaces so MM² and ESP32 on the LAN can reach it
+  host: "0.0.0.0"  # bind to all interfaces so other devices on the LAN can reach it
   port: 8423
 
+  # 4-digit PIN for the mobile web UI (string, e.g. "1234").
+  # If not set or left blank, the web UI is accessible without a PIN.
+  # The PIN only protects the browser UI — /sensor uses its own token below.
+  pin: ""
+
+  # How long a manual override (Force ON / Force OFF) lasts before
+  # auto-resuming normal schedule logic. Set to 0 to keep indefinitely.
+  override_expiry_minutes: 120
+
 # -------------------------------------------------------------------
-# Indoor sensor (future ESP32 — not used yet)
+# Indoor sensor (optional — ESP32 posting to /sensor)
 # -------------------------------------------------------------------
-# When an ESP32 POSTs to /sensor, readings are accepted here.
-# If enabled, decisions can be based on indoor temp in addition to outdoor.
+# If enabled: a fresh ESP32 reading takes priority over Tado's built-in
+# indoor sensor for decision-making. If disabled (or no fresh reading),
+# Tado's own insideTemperature reading is used automatically.
 sensor:
   enabled: false
-  # If a sensor reading is older than this, fall back to weather-only logic.
+  # Reject sensor readings older than this many seconds.
   max_age_seconds: 600
-  # Indoor threshold — if set and sensor is fresh, heat turns on if indoor < this.
-  indoor_threshold_celsius: 19.0
+  # Optional shared secret. If set, ESP32 must send X-Sensor-Token header.
+  # token: "change-me"
 
 # -------------------------------------------------------------------
 # Logging

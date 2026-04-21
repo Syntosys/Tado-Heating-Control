@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Heating Brain</title>
+  <link rel="stylesheet" href="/app.css" />
+</head>
+<body>
+  <!-- PIN screen — shown when not authenticated -->
+  <div id="pin-screen" class="screen hidden">
+    <div class="card pin-card">
+      <h1>Heating Brain</h1>
+      <p class="subtitle">Enter PIN to continue</p>
+      <div id="pin-display" class="pin-display">&#8226;&#8226;&#8226;&#8226;</div>
+      <div id="pin-error" class="pin-error hidden">Incorrect PIN</div>
+      <div class="pin-pad">
+        <button class="pin-btn" data-digit="1">1</button>
+        <button class="pin-btn" data-digit="2">2</button>
+        <button class="pin-btn" data-digit="3">3</button>
+        <button class="pin-btn" data-digit="4">4</button>
+        <button class="pin-btn" data-digit="5">5</button>
+        <button class="pin-btn" data-digit="6">6</button>
+        <button class="pin-btn" data-digit="7">7</button>
+        <button class="pin-btn" data-digit="8">8</button>
+        <button class="pin-btn" data-digit="9">9</button>
+        <button class="pin-btn pin-clear" data-action="clear">&#x232B;</button>
+        <button class="pin-btn" data-digit="0">0</button>
+        <button class="pin-btn pin-ok" data-action="submit">&#10003;</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Main app — shown when authenticated -->
+  <div id="app-screen" class="screen hidden">
+    <header class="app-header">
+      <span class="app-title">Heating Brain</span>
+      <button id="btn-logout" class="logout-btn">Log out</button>
+    </header>
+
+    <!-- Status card -->
+    <div class="card" id="card-status">
+      <h2>Status</h2>
+      <div class="status-grid">
+        <div class="status-item">
+          <span class="label">Heating</span>
+          <span id="st-heating" class="value badge">—</span>
+        </div>
+        <div class="status-item">
+          <span class="label">Window</span>
+          <span id="st-window" class="value">—</span>
+        </div>
+        <div class="status-item">
+          <span class="label">Indoor</span>
+          <span id="st-indoor" class="value">—</span>
+        </div>
+        <div class="status-item">
+          <span class="label">Outdoor</span>
+          <span id="st-outdoor" class="value">—</span>
+        </div>
+        <div class="status-item full-width">
+          <span class="label">Reason</span>
+          <span id="st-reason" class="value small">—</span>
+        </div>
+        <div class="status-item">
+          <span class="label">Last command</span>
+          <span id="st-lastcmd" class="value small">—</span>
+        </div>
+        <div class="status-item">
+          <span class="label">Override</span>
+          <span id="st-override" class="value small">none</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Manual override card -->
+    <div class="card" id="card-override">
+      <h2>Manual Override</h2>
+      <p class="hint">Override expires automatically after the configured time.</p>
+      <div class="btn-row">
+        <button id="btn-force-on"  class="ov-btn ov-on">Force ON</button>
+        <button id="btn-force-off" class="ov-btn ov-off">Force OFF</button>
+        <button id="btn-resume"    class="ov-btn ov-auto">Resume Auto</button>
+      </div>
+      <div id="override-feedback" class="feedback hidden"></div>
+    </div>
+
+    <!-- History graph card -->
+    <div class="card" id="card-history">
+      <h2>Last 24 Hours</h2>
+      <div id="chart-container">
+        <svg id="history-chart" viewBox="0 0 800 200" preserveAspectRatio="none"></svg>
+      </div>
+      <div class="chart-legend">
+        <span class="legend-indoor">&#9472; Indoor</span>
+        <span class="legend-outdoor">&#9472; Outdoor</span>
+        <span class="legend-heat">&#9608; Heating</span>
+      </div>
+    </div>
+
+    <!-- Schedule card -->
+    <div class="card" id="card-schedule">
+      <h2>Schedule</h2>
+      <div id="schedule-list"></div>
+      <button id="btn-add-window" class="add-btn">+ Add Window</button>
+    </div>
+
+    <!-- Window edit modal -->
+    <div id="modal-overlay" class="modal-overlay hidden">
+      <div class="modal-card">
+        <h3 id="modal-title">Edit Window</h3>
+        <form id="window-form" autocomplete="off">
+          <input type="hidden" id="wf-index" value="-1" />
+          <div class="form-row">
+            <label for="wf-name">Name</label>
+            <input type="text" id="wf-name" required maxlength="40" />
+          </div>
+          <div class="form-row">
+            <label>Days</label>
+            <div class="day-checks">
+              <label><input type="checkbox" name="day" value="mon" />Mon</label>
+              <label><input type="checkbox" name="day" value="tue" />Tue</label>
+              <label><input type="checkbox" name="day" value="wed" />Wed</label>
+              <label><input type="checkbox" name="day" value="thu" />Thu</label>
+              <label><input type="checkbox" name="day" value="fri" />Fri</label>
+              <label><input type="checkbox" name="day" value="sat" />Sat</label>
+              <label><input type="checkbox" name="day" value="sun" />Sun</label>
+            </div>
+            <div class="day-presets">
+              <button type="button" class="preset-btn" data-preset="all">All</button>
+              <button type="button" class="preset-btn" data-preset="weekdays">Weekdays</button>
+              <button type="button" class="preset-btn" data-preset="weekends">Weekends</button>
+            </div>
+          </div>
+          <div class="form-row two-col">
+            <div>
+              <label for="wf-start">Start</label>
+              <input type="time" id="wf-start" required />
+            </div>
+            <div>
+              <label for="wf-end">End</label>
+              <input type="time" id="wf-end" required />
+            </div>
+          </div>
+          <p class="form-section-label">ON thresholds (both must be met)</p>
+          <div class="form-row two-col">
+            <div>
+              <label for="wf-indoor-on">Indoor ON &lt; (°C)</label>
+              <input type="number" id="wf-indoor-on" step="0.5" required />
+            </div>
+            <div>
+              <label for="wf-outdoor-on">Outdoor ON &lt; (°C)</label>
+              <input type="number" id="wf-outdoor-on" step="0.5" required />
+            </div>
+          </div>
+          <p class="form-section-label">OFF thresholds (both must be met)</p>
+          <div class="form-row two-col">
+            <div>
+              <label for="wf-indoor-off">Indoor OFF &gt; (°C)</label>
+              <input type="number" id="wf-indoor-off" step="0.5" required />
+            </div>
+            <div>
+              <label for="wf-outdoor-off">Outdoor OFF &gt; (°C)</label>
+              <input type="number" id="wf-outdoor-off" step="0.5" required />
+            </div>
+          </div>
+          <div id="wf-error" class="form-error hidden"></div>
+          <div class="modal-actions">
+            <button type="button" id="wf-cancel" class="btn-secondary">Cancel</button>
+            <button type="button" id="wf-delete" class="btn-danger hidden">Delete</button>
+            <button type="submit" class="btn-primary">Save</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

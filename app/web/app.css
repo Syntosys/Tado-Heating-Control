@@ -1,0 +1,463 @@
+/* ------------------------------------------------------------------ */
+/* Reset & base                                                        */
+/* ------------------------------------------------------------------ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:          #0f1117;
+  --surface:     #1a1d27;
+  --surface2:    #22263a;
+  --border:      #2e3350;
+  --text:        #e2e4f0;
+  --text-muted:  #8890b0;
+  --accent:      #4f8ef7;
+  --on-green:    #2ecc71;
+  --off-red:     #e74c3c;
+  --warn-amber:  #f39c12;
+  --radius:      12px;
+  --gap:         16px;
+  font-size: 16px;
+}
+
+html, body {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.5;
+}
+
+/* ------------------------------------------------------------------ */
+/* Screen management                                                   */
+/* ------------------------------------------------------------------ */
+.screen { min-height: 100vh; }
+.hidden { display: none !important; }
+
+/* ------------------------------------------------------------------ */
+/* Card                                                                */
+/* ------------------------------------------------------------------ */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: var(--gap);
+  margin: var(--gap);
+}
+
+.card h2 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 12px;
+}
+
+/* ------------------------------------------------------------------ */
+/* PIN screen                                                          */
+/* ------------------------------------------------------------------ */
+#pin-screen {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+}
+
+.pin-card {
+  max-width: 340px;
+  width: 100%;
+  text-align: center;
+}
+
+.pin-card h1 {
+  font-size: 1.6rem;
+  margin-bottom: 4px;
+}
+
+.subtitle {
+  color: var(--text-muted);
+  margin-bottom: 20px;
+  font-size: 0.9rem;
+}
+
+.pin-display {
+  font-size: 2rem;
+  letter-spacing: 0.5em;
+  color: var(--accent);
+  margin-bottom: 8px;
+  min-height: 2.5rem;
+}
+
+.pin-error {
+  color: var(--off-red);
+  font-size: 0.85rem;
+  margin-bottom: 8px;
+  min-height: 1.2rem;
+}
+
+.pin-pad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-top: 16px;
+}
+
+.pin-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 1.4rem;
+  padding: 18px 0;
+  cursor: pointer;
+  transition: background 0.15s;
+  touch-action: manipulation;
+}
+
+.pin-btn:active { background: var(--accent); color: #fff; }
+.pin-clear { color: var(--warn-amber); }
+.pin-ok    { color: var(--on-green); }
+
+/* ------------------------------------------------------------------ */
+/* App header                                                          */
+/* ------------------------------------------------------------------ */
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px var(--gap);
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.app-title { font-weight: 700; font-size: 1.05rem; }
+
+.logout-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.logout-btn:active { color: var(--text); border-color: var(--text); }
+
+/* ------------------------------------------------------------------ */
+/* Status card                                                         */
+/* ------------------------------------------------------------------ */
+.status-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.status-item {
+  background: var(--surface2);
+  border-radius: 8px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.status-item.full-width { grid-column: span 2; }
+
+.label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+}
+
+.value { font-size: 1.1rem; font-weight: 600; }
+.value.small { font-size: 0.85rem; font-weight: 400; }
+
+.badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 20px;
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.badge.on  { background: rgba(46,204,113,0.2); color: var(--on-green); }
+.badge.off { background: rgba(231, 76, 60, 0.2); color: var(--off-red); }
+.badge.unknown { background: var(--surface2); color: var(--text-muted); }
+
+/* ------------------------------------------------------------------ */
+/* Override card                                                       */
+/* ------------------------------------------------------------------ */
+.hint { font-size: 0.82rem; color: var(--text-muted); margin-bottom: 12px; }
+
+.btn-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ov-btn {
+  flex: 1;
+  min-width: 90px;
+  padding: 14px 8px;
+  border-radius: var(--radius);
+  font-size: 0.95rem;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: opacity 0.15s;
+}
+
+.ov-btn:active { opacity: 0.75; }
+.ov-on   { background: var(--on-green); color: #000; }
+.ov-off  { background: var(--off-red);  color: #fff; }
+.ov-auto { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+
+.feedback {
+  margin-top: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+}
+
+.feedback.ok  { color: var(--on-green); }
+.feedback.err { color: var(--off-red); }
+
+/* ------------------------------------------------------------------ */
+/* History chart                                                       */
+/* ------------------------------------------------------------------ */
+#chart-container {
+  background: var(--surface2);
+  border-radius: 8px;
+  overflow: hidden;
+  width: 100%;
+}
+
+#history-chart {
+  display: block;
+  width: 100%;
+  height: 180px;
+}
+
+.chart-legend {
+  display: flex;
+  gap: 16px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-top: 8px;
+}
+
+.legend-indoor  { color: #4f8ef7; }
+.legend-outdoor { color: #f39c12; }
+.legend-heat    { color: rgba(46,204,113,0.5); }
+
+/* ------------------------------------------------------------------ */
+/* Schedule card                                                       */
+/* ------------------------------------------------------------------ */
+.window-item {
+  background: var(--surface2);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.window-info { flex: 1; }
+.window-name { font-weight: 600; margin-bottom: 4px; }
+.window-meta { font-size: 0.8rem; color: var(--text-muted); line-height: 1.7; }
+
+.window-edit-btn {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.window-edit-btn:active { color: var(--accent); border-color: var(--accent); }
+
+.add-btn {
+  width: 100%;
+  margin-top: 4px;
+  padding: 12px;
+  background: none;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius);
+  color: var(--accent);
+  font-size: 0.95rem;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.add-btn:active { background: var(--surface2); }
+
+/* ------------------------------------------------------------------ */
+/* Modal                                                               */
+/* ------------------------------------------------------------------ */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.75);
+  z-index: 100;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+}
+
+.modal-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius) var(--radius) 0 0;
+  padding: var(--gap);
+  width: 100%;
+  max-width: 560px;
+  max-height: 92vh;
+  overflow-y: auto;
+}
+
+.modal-card h3 {
+  font-size: 1.1rem;
+  margin-bottom: 16px;
+}
+
+.form-row {
+  margin-bottom: 14px;
+}
+
+.form-row label, .form-row > label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 5px;
+}
+
+.form-row input[type="text"],
+.form-row input[type="number"],
+.form-row input[type="time"] {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 10px 12px;
+  font-size: 1rem;
+}
+
+.form-row input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.two-col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.day-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.day-checks label {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.9rem;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.day-presets {
+  display: flex;
+  gap: 8px;
+}
+
+.preset-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-muted);
+  padding: 5px 12px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.preset-btn:active { color: var(--accent); border-color: var(--accent); }
+
+.form-section-label {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  margin-bottom: 8px;
+  margin-top: 4px;
+}
+
+.form-error {
+  color: var(--off-red);
+  font-size: 0.85rem;
+  margin-bottom: 10px;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 22px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.btn-secondary {
+  background: var(--surface2);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 18px;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+.btn-danger {
+  background: rgba(231,76,60,0.15);
+  color: var(--off-red);
+  border: 1px solid var(--off-red);
+  border-radius: 8px;
+  padding: 10px 18px;
+  font-size: 0.95rem;
+  cursor: pointer;
+}
+
+/* ------------------------------------------------------------------ */
+/* Responsive — wide screens                                           */
+/* ------------------------------------------------------------------ */
+@media (min-width: 600px) {
+  #app-screen { max-width: 640px; margin: 0 auto; }
+  .modal-overlay { align-items: center; }
+  .modal-card { border-radius: var(--radius); max-height: 85vh; }
+}

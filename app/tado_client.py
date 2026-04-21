@@ -293,3 +293,24 @@ class TadoClient:
         """Remove any manual overlay, returning the zone to Tado's own schedule."""
         self._request("DELETE", f"/homes/{home_id}/zones/{zone_id}/overlay")
         log.info("Cleared overlay for zone %s (back to Tado schedule)", zone_id)
+
+    def get_indoor_temperature(self, home_id: int, zone_id: int) -> Optional[float]:
+        """
+        Return the current indoor temperature for a zone from Tado's zone state,
+        or None if it cannot be read.
+
+        Tado's zone state response includes:
+          sensorDataPoints.insideTemperature.celsius
+        """
+        try:
+            state = self.get_zone_state(home_id, zone_id)
+            sensor_points = state.get("sensorDataPoints", {})
+            inside = sensor_points.get("insideTemperature", {})
+            celsius = inside.get("celsius")
+            if celsius is not None:
+                return float(celsius)
+            log.warning("Tado zone state had no insideTemperature.celsius field.")
+            return None
+        except Exception as e:
+            log.warning("Failed to read indoor temperature from Tado: %s", e)
+            return None

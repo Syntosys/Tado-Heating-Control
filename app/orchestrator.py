@@ -3,11 +3,14 @@ Main control loop.
 
 Every tick:
   1. Fetch outdoor weather (respecting its own cache interval).
-  2. Read indoor sensor snapshot (if present and fresh).
-  3. Run the decision engine.
-  4. If the desired state differs from the commanded state AND the min-state-change
+  2. Fetch indoor temperature from Tado zone state.
+     If a fresh ESP32 reading exists in shared state, prefer that over Tado's reading.
+  3. Check for an active manual override — if one is set, apply it directly.
+  4. Run the decision engine.
+  5. If the desired state differs from the commanded state AND the min-state-change
      interval has elapsed, push the new state to Tado.
-  5. Update the shared snapshot for the HTTP API.
+  6. Write a history sample.
+  7. Update the shared snapshot for the HTTP API.
 
 Tado calls are limited by the poll_interval_seconds config. With Auto-Assist
 (20,000 calls/day) the default 60s poll uses ~1,440 calls/day, well within budget.
@@ -25,6 +28,7 @@ from typing import Any, Optional
 import yaml
 
 from .decision import Decision, DecisionInputs, HeatingState, decide
+from .history import HistoryBuffer, HistorySample
 from .http_api import make_app
 from .schedule import parse_schedule
 from .state import SharedState
@@ -36,10 +40,12 @@ log = logging.getLogger(__name__)
 
 class Orchestrator:
     def __init__(self, config_path: str | Path):
-        self.config = self._load_config(config_path)
+        self.config_path = Path(config_path)
+        self.config = self._load_config(self.config_path)
         self._configure_logging()
 
         self.state = SharedState()
+        self.history = HistoryBuffer()
 
         loc = self.config["location"]
         self.weather = WeatherProvider(
@@ -56,20 +62,28 @@ class Orchestrator:
 
         ctrl = self.config["control"]
         self.target_c = float(ctrl["heat_on_target_celsius"])
-        self.hysteresis_c = float(ctrl["hysteresis_celsius"])
         self.min_state_change_interval = int(ctrl["min_state_change_interval_seconds"])
         self.off_behavior = ctrl.get("off_behavior", "off")
         self.on_termination = ctrl.get("on_overlay_termination", "MANUAL")
         self.timer_seconds = int(ctrl.get("timer_minutes", 120)) * 60
 
+        # Deprecated config fields — warn but don't crash.
+        if "hysteresis_celsius" in ctrl:
+            log.warning(
+                "control.hysteresis_celsius is deprecated and no longer used. "
+                "Remove it from config.yaml — heating now uses per-window thresholds."
+            )
         sensor_cfg = self.config.get("sensor", {}) or {}
         self.sensor_enabled = bool(sensor_cfg.get("enabled", False))
         self.sensor_max_age = int(sensor_cfg.get("max_age_seconds", 600))
-        self.indoor_threshold_c = (
-            float(sensor_cfg["indoor_threshold_celsius"])
-            if self.sensor_enabled and "indoor_threshold_celsius" in sensor_cfg
-            else None
-        )
+        if "indoor_threshold_celsius" in sensor_cfg:
+            log.warning(
+                "sensor.indoor_threshold_celsius is deprecated and no longer used. "
+                "Use per-window indoor_on_celsius / indoor_off_celsius instead."
+            )
+
+        http_cfg = self.config.get("http", {}) or {}
+        self.override_expiry_minutes = int(http_cfg.get("override_expiry_minutes", 120))
 
         self._home_id: Optional[int] = None
         self._zone_id: Optional[int] = self.config["tado"].get("zone_id")
@@ -79,7 +93,7 @@ class Orchestrator:
 
     # ------------------------------------------------------------------
     @staticmethod
-    def _load_config(path: str | Path) -> dict[str, Any]:
+    def _load_config(path: Path) -> dict[str, Any]:
         with open(path, "r") as f:
             return yaml.safe_load(f)
 
@@ -93,7 +107,6 @@ class Orchestrator:
                 logfile.parent.mkdir(parents=True, exist_ok=True)
                 handlers.append(logging.FileHandler(logfile))
             except OSError as e:
-                # Don't crash if we can't write the log file — fall back to stderr.
                 print(f"Couldn't open log file {lcfg['file']}: {e}", flush=True)
         logging.basicConfig(
             level=level,
@@ -116,10 +129,6 @@ class Orchestrator:
             self.state.update(tado_zone_id=self._zone_id)
 
     def _read_current_tado_state(self) -> HeatingState:
-        """
-        Figure out whether Tado currently has heating on or off, so our initial
-        commanded_state reflects reality rather than assuming UNKNOWN.
-        """
         try:
             s = self.tado.get_zone_state(self._home_id, self._zone_id)
             setting = s.get("setting", {})
@@ -147,15 +156,31 @@ class Orchestrator:
             log.warning("Weather fetch failed: %s", e)
             self.state.update(last_error=f"weather: {e}", last_error_at=time.time())
 
-    def _get_fresh_indoor(self) -> Optional[float]:
-        if not self.sensor_enabled:
-            return None
-        temp, fetched_at = self.state.indoor_reading()
-        if temp is None or fetched_at is None:
-            return None
-        if (time.time() - fetched_at) > self.sensor_max_age:
-            return None
-        return temp
+    def _get_indoor_temp(self) -> Optional[float]:
+        """
+        Return the best available indoor temperature reading.
+        Prefer a fresh ESP32 reading (posted to /sensor), fall back to Tado's
+        zone state reading.
+        """
+        # Prefer fresh ESP32 reading if the sensor is enabled and reading is recent.
+        if self.sensor_enabled:
+            temp, fetched_at = self.state.indoor_reading()
+            if temp is not None and fetched_at is not None:
+                if (time.time() - fetched_at) <= self.sensor_max_age:
+                    return temp
+
+        # Fall back to Tado's own indoor sensor reading.
+        if self._home_id is not None and self._zone_id is not None:
+            tado_indoor = self.tado.get_indoor_temperature(self._home_id, self._zone_id)
+            if tado_indoor is not None:
+                # Store it in shared state so the UI can show it.
+                self.state.update(
+                    indoor_temp_c=tado_indoor,
+                    indoor_fetched_at=time.time(),
+                )
+                return tado_indoor
+
+        return None
 
     def _apply_decision(self, decision: Decision) -> None:
         self.state.update(
@@ -178,7 +203,6 @@ class Orchestrator:
                 )
                 return
 
-        # Push to Tado.
         try:
             if decision.desired_state == HeatingState.ON:
                 self.tado.set_heating_on(
@@ -198,6 +222,7 @@ class Orchestrator:
             self.state.update(
                 commanded_state=self._commanded_state.value,
                 last_state_change_at=self._last_state_change_at,
+                last_tado_command_at=self._last_state_change_at,
             )
             log.info("Tado commanded -> %s (%s)", decision.desired_state.value, decision.reason)
         except Exception as e:
@@ -208,24 +233,52 @@ class Orchestrator:
     def _tick(self) -> None:
         self._fetch_weather_if_due()
         outdoor = self.weather.cached()
-        indoor = self._get_fresh_indoor()
+        indoor = self._get_indoor_temp()
 
-        inputs = DecisionInputs(
-            now=dt.datetime.now(),
-            outdoor_temp_c=outdoor.temperature_celsius if outdoor else None,
-            indoor_temp_c=indoor,
-            current_state=self._commanded_state,
-            schedule_windows=self.schedule_windows,
-            hysteresis_c=self.hysteresis_c,
-            indoor_threshold_c=self.indoor_threshold_c,
-        )
-        decision = decide(inputs)
+        outdoor_temp = outdoor.temperature_celsius if outdoor else None
+
+        # Check for active manual override — applies before decision engine.
+        override = self.state.get_override()
+        if override is not None:
+            desired = HeatingState.ON if override == "on" else HeatingState.OFF
+            reason = f"manual override: {override}"
+            decision = Decision(
+                desired_state=desired,
+                reason=reason,
+                extras={
+                    "indoor_temp_c": indoor,
+                    "outdoor_temp_c": outdoor_temp,
+                    "rule_fired": "override",
+                },
+            )
+        else:
+            inputs = DecisionInputs(
+                now=dt.datetime.now(),
+                outdoor_temp_c=outdoor_temp,
+                indoor_temp_c=indoor,
+                current_state=self._commanded_state,
+                schedule_windows=self.schedule_windows,
+                # Pass zero/None for deprecated fields — will not trigger warnings
+                # since they equal the defaults.
+                hysteresis_c=0.0,
+                indoor_threshold_c=None,
+            )
+            decision = decide(inputs)
+
         log.debug("Decision: %s (%s)", decision.desired_state, decision.reason)
         self._apply_decision(decision)
         self.state.update(last_loop_at=time.time())
 
+        # Write history sample.
+        snap = self.state.snapshot()
+        self.history.add(HistorySample(
+            ts=time.time(),
+            indoor_temp_c=indoor,
+            outdoor_temp_c=outdoor_temp,
+            heating_on=(self._commanded_state == HeatingState.ON),
+        ))
+
     def _control_loop(self) -> None:
-        # Authenticate + resolve IDs before starting.
         log.info("Starting up — resolving Tado auth and IDs.")
         self.tado.ensure_authenticated()
         self._ensure_tado_ids()
@@ -239,7 +292,6 @@ class Orchestrator:
             except Exception as e:
                 log.exception("Tick failed: %s", e)
                 self.state.update(last_error=str(e), last_error_at=time.time())
-            # Sleep in small increments so stop is responsive.
             slept = 0.0
             while slept < self.tado_interval and not self._stop.is_set():
                 time.sleep(1.0)
@@ -247,12 +299,20 @@ class Orchestrator:
 
     # ------------------------------------------------------------------
     def run(self) -> None:
-        # Start HTTP API in a background thread.
         http_cfg = self.config.get("http", {}) or {}
         host = http_cfg.get("host", "0.0.0.0")
         port = int(http_cfg.get("port", 8423))
         sensor_token = (self.config.get("sensor", {}) or {}).get("token")
-        app = make_app(self.state, sensor_token=sensor_token)
+        pin = str(http_cfg.get("pin", "")) or None
+        app = make_app(
+            self.state,
+            history=self.history,
+            schedule_windows=self.schedule_windows,
+            config_path=self.config_path,
+            sensor_token=sensor_token,
+            pin=pin,
+            override_expiry_minutes=self.override_expiry_minutes,
+        )
         api_thread = threading.Thread(
             target=lambda: app.run(host=host, port=port, debug=False, use_reloader=False),
             daemon=True,

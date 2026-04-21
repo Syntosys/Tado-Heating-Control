@@ -29,11 +29,20 @@ class Snapshot:
     last_error_at: Optional[float] = None
     tado_zone_id: Optional[int] = None
     tado_home_id: Optional[int] = None
+    # Override fields
+    override_mode: Optional[str] = None          # "on" | "off" | None (None = auto)
+    override_expiry_at: Optional[float] = None   # unix ts when override expires
+    last_tado_command_at: Optional[float] = None # last time we actually sent a cmd to Tado
+    next_transition: Optional[str] = None        # human-readable description
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
         # Add human-friendly derivatives
         d["now"] = time.time()
+        # Flatten override into a single field for the UI
+        d["override_active"] = self.override_mode is not None and (
+            self.override_expiry_at is None or time.time() < self.override_expiry_at
+        )
         return d
 
 
@@ -45,7 +54,8 @@ class SharedState:
     def update(self, **fields: Any) -> None:
         with self._lock:
             for k, v in fields.items():
-                setattr(self._snap, k, v)
+                if hasattr(self._snap, k):
+                    setattr(self._snap, k, v)
 
     def record_indoor(self, temp_c: float) -> None:
         with self._lock:
@@ -60,3 +70,34 @@ class SharedState:
         """Return (temp_c, fetched_at) under lock."""
         with self._lock:
             return self._snap.indoor_temp_c, self._snap.indoor_fetched_at
+
+    # ------------------------------------------------------------------
+    # Override management
+    # ------------------------------------------------------------------
+    def set_override(self, mode: str, expiry_minutes: int) -> None:
+        """Set a manual override: mode is 'on' or 'off'."""
+        with self._lock:
+            self._snap.override_mode = mode
+            self._snap.override_expiry_at = time.time() + expiry_minutes * 60
+
+    def clear_override(self) -> None:
+        """Clear any active manual override (resume auto)."""
+        with self._lock:
+            self._snap.override_mode = None
+            self._snap.override_expiry_at = None
+
+    def get_override(self) -> Optional[str]:
+        """
+        Return the active override mode ('on' or 'off'), or None if no
+        active override (either not set or expired).
+        """
+        with self._lock:
+            mode = self._snap.override_mode
+            expiry = self._snap.override_expiry_at
+        if mode is None:
+            return None
+        if expiry is not None and time.time() >= expiry:
+            # Expired — clear it.
+            self.clear_override()
+            return None
+        return mode
