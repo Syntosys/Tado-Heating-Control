@@ -1,0 +1,69 @@
+/* MMM-HeatingBrain styles — muted so it fits MagicMirror's default dark aesthetic */
+
+.heating-brain {
+	font-family: "Roboto Condensed", sans-serif;
+	color: #ddd;
+	min-width: 300px;
+}
+
+.hb-pill {
+	display: inline-block;
+	padding: 6px 14px;
+	margin-bottom: 12px;
+	border-radius: 20px;
+	font-size: 1.1em;
+	letter-spacing: 2px;
+	border: 1px solid #555;
+}
+.hb-pill-on {
+	color: #ffb26b;           /* warm amber */
+	border-color: #b86a30;
+	background: rgba(184, 106, 48, 0.08);
+}
+.hb-pill-off {
+	color: #7cc0ff;           /* cool blue */
+	border-color: #3a6a95;
+	background: rgba(58, 106, 149, 0.08);
+}
+.hb-pill-unknown {
+	color: #888;
+}
+.hb-stale {
+	opacity: 0.4;
+}
+
+.hb-temps {
+	display: flex;
+	justify-content: space-between;
+	gap: 18px;
+	margin-bottom: 10px;
+}
+.hb-temp {
+	flex: 1;
+	text-align: center;
+}
+.hb-temp-label {
+	font-size: 0.7em;
+	text-transform: uppercase;
+	letter-spacing: 2px;
+	color: #888;
+}
+.hb-temp-value {
+	font-size: 1.6em;
+	font-weight: 300;
+	margin: 2px 0;
+}
+.hb-temp-age {
+	font-size: 0.7em;
+}
+
+.hb-reason {
+	font-style: italic;
+	color: #999;
+	font-size: 0.8em;
+}
+
+.hb-error {
+	color: #e07070;
+	margin-top: 6px;
+}

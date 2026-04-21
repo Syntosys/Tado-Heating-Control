@@ -1,0 +1,27 @@
+[Unit]
+Description=Heating Brain (Tado controller)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=heating-brain
+Group=heating-brain
+WorkingDirectory=/opt/heating-brain
+ExecStart=/opt/heating-brain/venv/bin/python -m app.orchestrator --config /etc/heating-brain/config.yaml
+Restart=on-failure
+RestartSec=10
+
+# Security hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/heating-brain /var/log/heating-brain
+
+# Standard streams -> journal
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
