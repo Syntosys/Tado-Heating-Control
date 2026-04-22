@@ -35,88 +35,148 @@
   <div id="app-screen" class="screen hidden">
     <header class="app-header">
       <span class="app-title">Heating Brain</span>
-      <button id="btn-logout" class="logout-btn">Log out</button>
     </header>
 
-    <!-- Status card -->
-    <div class="card" id="card-status">
-      <h2>Status</h2>
-      <div class="status-grid">
-        <div class="status-item">
-          <span class="label">Heating</span>
+    <!-- Page: Now (#/now) -->
+    <div id="page-now" class="page">
+
+      <!-- Status header card -->
+      <div class="card" id="card-status">
+        <div class="status-header-row">
+          <span id="st-status-label" class="status-label">STATUS</span>
           <span id="st-heating" class="value badge">—</span>
         </div>
-        <div class="status-item">
-          <span class="label">Window</span>
-          <span id="st-window" class="value">—</span>
+      </div>
+
+      <!-- Control buttons card -->
+      <div class="card" id="card-control">
+        <div class="control-btn-row">
+          <button id="btn-force-on"  class="ctrl-btn ctrl-on">On</button>
+          <button id="btn-force-off" class="ctrl-btn ctrl-off">Off</button>
+          <button id="btn-resume"    class="ctrl-btn ctrl-auto">Auto</button>
         </div>
-        <div class="status-item">
+        <div id="override-feedback" class="feedback hidden"></div>
+      </div>
+
+      <!-- Temperature tiles -->
+      <div class="temp-tiles">
+        <div class="card temp-tile">
           <span class="label">Indoor</span>
-          <span id="st-indoor" class="value">—</span>
+          <span id="st-indoor" class="temp-value">—</span>
         </div>
-        <div class="status-item">
+        <div class="card temp-tile">
           <span class="label">Outdoor</span>
-          <span id="st-outdoor" class="value">—</span>
-        </div>
-        <div class="status-item full-width">
-          <span class="label">Reason</span>
-          <span id="st-reason" class="value small">—</span>
-        </div>
-        <div class="status-item">
-          <span class="label">Last command</span>
-          <span id="st-lastcmd" class="value small">—</span>
-        </div>
-        <div class="status-item">
-          <span class="label">Override</span>
-          <span id="st-override" class="value small">none</span>
+          <span id="st-outdoor" class="temp-value">—</span>
         </div>
       </div>
-    </div>
 
-    <!-- Manual override card -->
-    <div class="card" id="card-override">
-      <h2>Manual Override</h2>
-      <p class="hint">Override expires automatically after the configured time.</p>
-      <div class="btn-row">
-        <button id="btn-force-on"  class="ov-btn ov-on">On</button>
-        <button id="btn-force-off" class="ov-btn ov-off">Off</button>
-        <button id="btn-resume"    class="ov-btn ov-auto">Resume Auto</button>
+      <!-- Last command card -->
+      <div class="card" id="card-lastcmd">
+        <h2 id="lastcmd-header">LAST COMMAND</h2>
+        <p id="st-reason" class="reason-text">—</p>
       </div>
-      <div id="override-feedback" class="feedback hidden"></div>
-    </div>
 
-    <!-- History graph card -->
-    <div class="card" id="card-history">
-      <h2>Last 24 Hours</h2>
-      <div id="chart-container">
-        <svg id="history-chart" viewBox="0 0 800 200" preserveAspectRatio="none"></svg>
+      <!-- Next schedule card -->
+      <div class="card" id="card-next-schedule">
+        <h2>SCHEDULE</h2>
+        <p id="next-schedule-text" class="reason-text">—</p>
       </div>
-      <div class="chart-legend">
-        <span class="legend-indoor">&#9472; Indoor</span>
-        <span class="legend-outdoor">&#9472; Outdoor</span>
-        <span class="legend-heat">&#9608; Heating</span>
+
+    </div>
+
+    <!-- Page: History (#/history) -->
+    <div id="page-history" class="page hidden">
+      <div class="card" id="card-history-24">
+        <h2>Last 24 Hours</h2>
+        <div class="chart-container">
+          <svg id="history-chart-24" viewBox="0 0 800 200" preserveAspectRatio="none"></svg>
+        </div>
+        <div class="chart-legend">
+          <span class="legend-indoor">&#9472; Indoor</span>
+          <span class="legend-outdoor">&#9472; Outdoor</span>
+          <span class="legend-heat">&#9608; Heating</span>
+        </div>
+      </div>
+
+      <div class="card" id="card-history-week">
+        <h2>Last 7 Days</h2>
+        <div class="chart-container">
+          <svg id="history-chart-week" viewBox="0 0 800 200" preserveAspectRatio="none"></svg>
+        </div>
+        <div class="chart-legend">
+          <span class="legend-indoor">&#9472; Indoor</span>
+          <span class="legend-outdoor">&#9472; Outdoor</span>
+          <span class="legend-heat">&#9608; Heating</span>
+        </div>
       </div>
     </div>
 
-    <!-- Schedule card -->
-    <div class="card" id="card-schedule">
-      <h2>Schedule</h2>
-      <div id="schedule-list"></div>
-      <button id="btn-add-window" class="add-btn">+ Add Window</button>
-    </div>
-
-    <!-- System / update card -->
-    <div class="card" id="card-system">
-      <h2>System</h2>
-      <div class="kv">
-        <span class="label">Version</span>
-        <span id="sys-version" class="value small mono">—</span>
+    <!-- Page: Schedule (#/schedule) -->
+    <div id="page-schedule" class="page hidden">
+      <div class="card" id="card-schedule">
+        <h2>Schedule</h2>
+        <div id="schedule-list"></div>
+        <button id="btn-add-window" class="add-btn">+ Add Window</button>
       </div>
-      <button id="btn-check-update" class="add-btn">Check for updates</button>
-      <div id="update-feedback" class="feedback hidden"></div>
     </div>
 
-    <!-- Window edit modal -->
+    <!-- Page: Settings (#/settings) -->
+    <div id="page-settings" class="page hidden">
+
+      <!-- System card -->
+      <div class="card" id="card-system">
+        <h2>System</h2>
+        <div class="kv">
+          <span class="label">Version</span>
+          <span id="sys-version" class="value small mono">—</span>
+        </div>
+        <button id="btn-check-update" class="add-btn" style="margin-top:12px">Check for updates</button>
+        <div id="update-feedback" class="feedback hidden"></div>
+      </div>
+
+      <!-- Security card -->
+      <div class="card" id="card-security">
+        <h2>Security</h2>
+        <p class="hint">Change your 4-digit PIN.</p>
+        <div class="form-row">
+          <label for="pin-new">New PIN</label>
+          <input type="tel" id="pin-new" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" placeholder="1234" autocomplete="new-password" />
+        </div>
+        <div class="form-row">
+          <label for="pin-confirm">Confirm PIN</label>
+          <input type="tel" id="pin-confirm" inputmode="numeric" pattern="[0-9]{4}" maxlength="4" placeholder="1234" autocomplete="new-password" />
+        </div>
+        <button id="btn-change-pin" class="btn-primary" style="width:100%;margin-top:4px">Change PIN</button>
+        <div id="pin-change-feedback" class="feedback hidden" style="margin-top:10px"></div>
+
+        <div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border)">
+          <button id="btn-logout" class="btn-danger" style="width:100%">Log out</button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Bottom tab bar -->
+    <nav class="tab-bar">
+      <a href="#/now"      class="tab-item" data-page="now">
+        <span class="tab-icon">&#9632;</span>
+        <span class="tab-label">Now</span>
+      </a>
+      <a href="#/history"  class="tab-item" data-page="history">
+        <span class="tab-icon">&#9641;</span>
+        <span class="tab-label">History</span>
+      </a>
+      <a href="#/schedule" class="tab-item" data-page="schedule">
+        <span class="tab-icon">&#9776;</span>
+        <span class="tab-label">Schedule</span>
+      </a>
+      <a href="#/settings" class="tab-item" data-page="settings">
+        <span class="tab-icon">&#9881;</span>
+        <span class="tab-label">Settings</span>
+      </a>
+    </nav>
+
+    <!-- Window edit modal (shared across pages) -->
     <div id="modal-overlay" class="modal-overlay hidden">
       <div class="modal-card">
         <h3 id="modal-title">Edit Window</h3>
@@ -156,22 +216,22 @@
           <p class="form-section-label">ON thresholds (both must be met)</p>
           <div class="form-row two-col">
             <div>
-              <label for="wf-indoor-on">Indoor ON &lt; (°C)</label>
+              <label for="wf-indoor-on">Indoor ON &lt; (&#176;C)</label>
               <input type="number" id="wf-indoor-on" step="0.5" required />
             </div>
             <div>
-              <label for="wf-outdoor-on">Outdoor ON &lt; (°C)</label>
+              <label for="wf-outdoor-on">Outdoor ON &lt; (&#176;C)</label>
               <input type="number" id="wf-outdoor-on" step="0.5" required />
             </div>
           </div>
           <p class="form-section-label">OFF thresholds (both must be met)</p>
           <div class="form-row two-col">
             <div>
-              <label for="wf-indoor-off">Indoor OFF &gt; (°C)</label>
+              <label for="wf-indoor-off">Indoor OFF &gt; (&#176;C)</label>
               <input type="number" id="wf-indoor-off" step="0.5" required />
             </div>
             <div>
-              <label for="wf-outdoor-off">Outdoor OFF &gt; (°C)</label>
+              <label for="wf-outdoor-off">Outdoor OFF &gt; (&#176;C)</label>
               <input type="number" id="wf-outdoor-off" step="0.5" required />
             </div>
           </div>

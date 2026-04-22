@@ -47,6 +47,7 @@ Tado made significant changes in 2025 that affect anyone integrating with their 
 - Configurable minimum time between state changes
 - Optional indoor sensor input via HTTP (ESP32-ready)
 - HTTP API for dashboards and integrations
+- **Mobile web UI** — PIN-protected multi-page SPA served at port 8423; four tabs: Now (live status + On/Off/Auto controls), History (24 h and 7-day temperature/heating charts), Schedule (add/edit/delete windows), Settings (version/update + PIN change)
 - MagicMirror² module included
 - Systemd hardening (runs as unprivileged user, read-only filesystem)
 

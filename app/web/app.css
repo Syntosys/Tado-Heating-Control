@@ -16,6 +16,7 @@
   --warn-amber:  #f39c12;
   --radius:      12px;
   --gap:         16px;
+  --tab-h:       60px;
   font-size: 16px;
 }
 
@@ -41,11 +42,11 @@ html, body {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: var(--gap);
-  margin: var(--gap);
+  margin: var(--gap) var(--gap) 0 var(--gap);
 }
 
 .card h2 {
-  font-size: 1rem;
+  font-size: 0.72rem;
   font-weight: 600;
   color: var(--text-muted);
   text-transform: uppercase;
@@ -67,6 +68,9 @@ html, body {
   max-width: 340px;
   width: 100%;
   text-align: center;
+  margin: 0;
+  border: none;
+  background: transparent;
 }
 
 .pin-card h1 {
@@ -124,7 +128,6 @@ html, body {
 .app-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   padding: 14px var(--gap);
   border-bottom: 1px solid var(--border);
   background: var(--surface);
@@ -135,37 +138,152 @@ html, body {
 
 .app-title { font-weight: 700; font-size: 1.05rem; }
 
-.logout-btn {
-  background: none;
-  border: 1px solid var(--border);
-  color: var(--text-muted);
-  border-radius: 8px;
-  padding: 6px 14px;
-  font-size: 0.8rem;
-  cursor: pointer;
+/* ------------------------------------------------------------------ */
+/* App screen layout — room for sticky header + fixed tab bar         */
+/* ------------------------------------------------------------------ */
+#app-screen {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
 }
 
-.logout-btn:active { color: var(--text); border-color: var(--text); }
+.page {
+  flex: 1;
+  padding-bottom: calc(var(--tab-h) + var(--gap));
+  overflow-y: auto;
+}
 
 /* ------------------------------------------------------------------ */
-/* Status card                                                         */
+/* Bottom tab bar                                                      */
 /* ------------------------------------------------------------------ */
-.status-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+.tab-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: var(--tab-h);
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  display: flex;
+  z-index: 20;
+}
+
+.tab-item {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  text-decoration: none;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  transition: color 0.15s;
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+
+.tab-item.active {
+  color: var(--accent);
+}
+
+.tab-icon {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.tab-label {
+  font-size: 0.68rem;
+  font-weight: 500;
+}
+
+/* ------------------------------------------------------------------ */
+/* Now page — status header card                                       */
+/* ------------------------------------------------------------------ */
+.status-header-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.status-label {
+  font-size: 0.95rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text);
+}
+
+.badge {
+  display: inline-block;
+  padding: 3px 12px;
+  border-radius: 20px;
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.badge.on      { background: rgba(46,204,113,0.2); color: var(--on-green); }
+.badge.off     { background: rgba(231,76,60,0.2);  color: var(--off-red); }
+.badge.unknown { background: var(--surface2);       color: var(--text-muted); }
+
+/* ------------------------------------------------------------------ */
+/* Now page — control buttons                                         */
+/* ------------------------------------------------------------------ */
+.control-btn-row {
+  display: flex;
   gap: 10px;
 }
 
-.status-item {
-  background: var(--surface2);
-  border-radius: 8px;
-  padding: 10px 12px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+.ctrl-btn {
+  flex: 1;
+  padding: 16px 8px;
+  border-radius: var(--radius);
+  font-size: 1rem;
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: opacity 0.15s, background 0.15s;
 }
 
-.status-item.full-width { grid-column: span 2; }
+/* Active (solid, vibrant) */
+.ctrl-btn.ctrl-active.ctrl-on   { background: var(--on-green);  color: #000; opacity: 1; }
+.ctrl-btn.ctrl-active.ctrl-off  { background: var(--off-red);   color: #fff; opacity: 1; }
+.ctrl-btn.ctrl-active.ctrl-auto { background: var(--accent);    color: #fff; opacity: 1; }
+
+/* Dull (muted background, low-contrast text) */
+.ctrl-btn.ctrl-dull {
+  background: var(--surface2);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  opacity: 0.7;
+}
+
+/* Fallback if neither class applied yet */
+.ctrl-on   { background: var(--surface2); color: var(--text-muted); border: 1px solid var(--border); }
+.ctrl-off  { background: var(--surface2); color: var(--text-muted); border: 1px solid var(--border); }
+.ctrl-auto { background: var(--surface2); color: var(--text-muted); border: 1px solid var(--border); }
+
+.ctrl-btn:active { opacity: 0.6 !important; }
+
+/* ------------------------------------------------------------------ */
+/* Now page — temperature tiles                                        */
+/* ------------------------------------------------------------------ */
+.temp-tiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0 var(--gap);
+  margin: var(--gap) var(--gap) 0 var(--gap);
+}
+
+.temp-tile {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 18px 12px;
+  gap: 6px;
+}
 
 .label {
   font-size: 0.72rem;
@@ -174,50 +292,24 @@ html, body {
   color: var(--text-muted);
 }
 
-.value { font-size: 1.1rem; font-weight: 600; }
-.value.small { font-size: 0.85rem; font-weight: 400; }
-
-.badge {
-  display: inline-block;
-  padding: 2px 10px;
-  border-radius: 20px;
-  font-size: 0.95rem;
+.temp-value {
+  font-size: 1.6rem;
   font-weight: 700;
+  color: var(--text);
 }
-
-.badge.on  { background: rgba(46,204,113,0.2); color: var(--on-green); }
-.badge.off { background: rgba(231, 76, 60, 0.2); color: var(--off-red); }
-.badge.unknown { background: var(--surface2); color: var(--text-muted); }
 
 /* ------------------------------------------------------------------ */
-/* Override card                                                       */
+/* Now page — last command / schedule cards                            */
 /* ------------------------------------------------------------------ */
-.hint { font-size: 0.82rem; color: var(--text-muted); margin-bottom: 12px; }
-
-.btn-row {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
+.reason-text {
+  font-size: 0.9rem;
+  color: var(--text);
+  line-height: 1.6;
 }
 
-.ov-btn {
-  flex: 1;
-  min-width: 90px;
-  padding: 14px 8px;
-  border-radius: var(--radius);
-  font-size: 0.95rem;
-  font-weight: 600;
-  border: none;
-  cursor: pointer;
-  touch-action: manipulation;
-  transition: opacity 0.15s;
-}
-
-.ov-btn:active { opacity: 0.75; }
-.ov-on   { background: var(--on-green); color: #000; }
-.ov-off  { background: var(--off-red);  color: #fff; }
-.ov-auto { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
-
+/* ------------------------------------------------------------------ */
+/* Feedback                                                            */
+/* ------------------------------------------------------------------ */
 .feedback {
   margin-top: 10px;
   padding: 8px 12px;
@@ -232,16 +324,16 @@ html, body {
 .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 
 /* ------------------------------------------------------------------ */
-/* History chart                                                       */
+/* History charts                                                      */
 /* ------------------------------------------------------------------ */
-#chart-container {
+.chart-container {
   background: var(--surface2);
   border-radius: 8px;
   overflow: hidden;
   width: 100%;
 }
 
-#history-chart {
+.chart-container svg {
   display: block;
   width: 100%;
   height: 180px;
@@ -306,6 +398,53 @@ html, body {
 .add-btn:active { background: var(--surface2); }
 
 /* ------------------------------------------------------------------ */
+/* Settings cards                                                      */
+/* ------------------------------------------------------------------ */
+.hint { font-size: 0.82rem; color: var(--text-muted); margin-bottom: 12px; }
+
+.kv {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+}
+
+.value { font-size: 1.1rem; font-weight: 600; }
+.value.small { font-size: 0.85rem; font-weight: 400; }
+
+/* ------------------------------------------------------------------ */
+/* Forms (shared — settings + modal)                                   */
+/* ------------------------------------------------------------------ */
+.form-row {
+  margin-bottom: 14px;
+}
+
+.form-row label, .form-row > label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-bottom: 5px;
+}
+
+.form-row input[type="text"],
+.form-row input[type="number"],
+.form-row input[type="time"],
+.form-row input[type="tel"] {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  padding: 10px 12px;
+  font-size: 1rem;
+}
+
+.form-row input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* ------------------------------------------------------------------ */
 /* Modal                                                               */
 /* ------------------------------------------------------------------ */
 .modal-overlay {
@@ -332,34 +471,6 @@ html, body {
 .modal-card h3 {
   font-size: 1.1rem;
   margin-bottom: 16px;
-}
-
-.form-row {
-  margin-bottom: 14px;
-}
-
-.form-row label, .form-row > label {
-  display: block;
-  font-size: 0.8rem;
-  color: var(--text-muted);
-  margin-bottom: 5px;
-}
-
-.form-row input[type="text"],
-.form-row input[type="number"],
-.form-row input[type="time"] {
-  width: 100%;
-  background: var(--surface2);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  color: var(--text);
-  padding: 10px 12px;
-  font-size: 1rem;
-}
-
-.form-row input:focus {
-  outline: none;
-  border-color: var(--accent);
 }
 
 .two-col {
@@ -423,6 +534,9 @@ html, body {
   margin-top: 8px;
 }
 
+/* ------------------------------------------------------------------ */
+/* Buttons                                                             */
+/* ------------------------------------------------------------------ */
 .btn-primary {
   background: var(--accent);
   color: #fff;
@@ -432,6 +546,7 @@ html, body {
   font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;
+  touch-action: manipulation;
 }
 
 .btn-secondary {
@@ -442,6 +557,7 @@ html, body {
   padding: 10px 18px;
   font-size: 0.95rem;
   cursor: pointer;
+  touch-action: manipulation;
 }
 
 .btn-danger {
@@ -452,13 +568,15 @@ html, body {
   padding: 10px 18px;
   font-size: 0.95rem;
   cursor: pointer;
+  touch-action: manipulation;
 }
 
 /* ------------------------------------------------------------------ */
 /* Responsive — wide screens                                           */
 /* ------------------------------------------------------------------ */
 @media (min-width: 600px) {
-  #app-screen { max-width: 640px; margin: 0 auto; }
+  #app-screen    { max-width: 640px; margin: 0 auto; }
+  .tab-bar       { max-width: 640px; left: 50%; transform: translateX(-50%); right: auto; width: 640px; }
   .modal-overlay { align-items: center; }
-  .modal-card { border-radius: var(--radius); max-height: 85vh; }
+  .modal-card    { border-radius: var(--radius); max-height: 85vh; }
 }

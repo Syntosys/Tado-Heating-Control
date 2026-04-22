@@ -129,3 +129,115 @@ def write_schedule(config_path: Path, windows: list[Window]) -> None:
     finally:
         _lock_release(lock_fd)
         lock_fd.close()
+
+
+def _strip_key_from_section(lines: list[str], section: str, key: str) -> list[str]:
+    """
+    Remove a specific key line from within a named section block.
+    Only removes the single matching key line (simple scalar value).
+    """
+    out: list[str] = []
+    in_section = False
+    key_pattern = re.compile(r"^(\s+)" + re.escape(key) + r"\s*:")
+    for line in lines:
+        if re.match(r"^" + re.escape(section) + r"\s*:", line):
+            in_section = True
+            out.append(line)
+            continue
+        if in_section:
+            if line and not line[0].isspace() and not line.startswith("#"):
+                in_section = False
+                out.append(line)
+                continue
+            if key_pattern.match(line):
+                continue  # skip the old key line
+        out.append(line)
+    return out
+
+
+def patch_config(config_path: Path, section: str, key: str, value: str) -> None:
+    """
+    Set a scalar key within an existing YAML section to a new value.
+
+    Rewrites the matching ``key: <value>`` line inside ``section:`` in-place,
+    preserving all comments and other content.  If the key does not exist it is
+    appended to the section.  Uses the same lock-and-atomic-replace strategy as
+    ``write_schedule``.
+
+    Args:
+        config_path: Path to config.yaml.
+        section: Top-level YAML section name (e.g. "http").
+        key: Key within that section (e.g. "pin").
+        value: New string value to write (will be single-quoted in YAML).
+    """
+    LOCK_FILE.parent.mkdir(parents=True, exist_ok=True)
+    lock_fd = open(LOCK_FILE, "w")
+    try:
+        _lock_acquire(lock_fd)
+
+        config_path = Path(config_path)
+        original = config_path.read_text(encoding="utf-8")
+        lines = original.splitlines(keepends=True)
+
+        # Find the indentation of the section and insert/replace the key.
+        new_lines: list[str] = []
+        in_section = False
+        key_written = False
+        section_indent = "  "  # default; will be detected from existing keys
+        key_pattern = re.compile(r"^(\s+)" + re.escape(key) + r"\s*:")
+
+        for i, line in enumerate(lines):
+            if re.match(r"^" + re.escape(section) + r"\s*:", line):
+                in_section = True
+                key_written = False
+                new_lines.append(line)
+                continue
+
+            if in_section:
+                # Detect indentation from first indented line in this section
+                if line and line[0].isspace():
+                    m = re.match(r"^(\s+)", line)
+                    if m:
+                        section_indent = m.group(1)
+
+                # End of section — write key if not yet written
+                if line and not line[0].isspace() and not line.startswith("#"):
+                    if not key_written:
+                        new_lines.append(f"{section_indent}{key}: '{value}'\n")
+                        key_written = True
+                    in_section = False
+                    new_lines.append(line)
+                    continue
+
+                # Replace existing key line
+                if key_pattern.match(line):
+                    new_lines.append(f"{section_indent}{key}: '{value}'\n")
+                    key_written = True
+                    continue
+
+            new_lines.append(line)
+
+        # If section ended at EOF without writing the key
+        if in_section and not key_written:
+            new_lines.append(f"{section_indent}{key}: '{value}'\n")
+
+        new_content = "".join(new_lines)
+        tmp = config_path.with_suffix(".tmp")
+        tmp.write_text(new_content, encoding="utf-8")
+        tmp.replace(config_path)
+        log.info("Config %s.%s updated.", section, key)
+
+    finally:
+        _lock_release(lock_fd)
+        lock_fd.close()
+
+
+def write_http_pin(config_path: Path, new_pin: str) -> None:
+    """
+    Rewrite the ``http.pin`` field in config_path.
+    The value is stored as a plain 4-digit string.
+    Raises ValueError for invalid pins, OSError on write failure.
+    """
+    if not re.match(r"^\d{4}$", str(new_pin)):
+        raise ValueError("PIN must be exactly 4 digits.")
+    patch_config(config_path, "http", "pin", str(new_pin))

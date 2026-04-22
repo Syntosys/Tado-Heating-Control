@@ -1,5 +1,5 @@
 /* ------------------------------------------------------------------ */
-/* Heating Brain — mobile web UI                                      */
+/* Heating Brain — multi-page SPA                                     */
 /* vanilla JS, no framework, no build step                            */
 /* ------------------------------------------------------------------ */
 
@@ -25,6 +25,24 @@ function el(tag, attrs, children) {
     }
   }
   return e;
+}
+
+function fmtTemp(v) {
+  return (v != null) ? v.toFixed(1) + " °C" : "—";
+}
+
+function relativeTime(epochSeconds) {
+  if (!epochSeconds) return null;
+  const diffMs = Date.now() - epochSeconds * 1000;
+  const diffSec = Math.floor(diffMs / 1000);
+  if (diffSec < 5)  return "just now";
+  if (diffSec < 60) return diffSec + "s ago";
+  const diffMin = Math.floor(diffSec / 60);
+  if (diffMin < 60) return diffMin + "m ago";
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24)  return diffHr + "h ago";
+  const diffDay = Math.floor(diffHr / 24);
+  return diffDay + "d ago";
 }
 
 // ------------------------------------------------------------------ //
@@ -92,7 +110,7 @@ const PinScreen = (() => {
 })();
 
 // ------------------------------------------------------------------ //
-// Screen switching                                                    //
+// Screen / page switching                                             //
 // ------------------------------------------------------------------ //
 
 function showPinScreen() {
@@ -105,6 +123,58 @@ function showApp() {
   document.getElementById("app-screen").classList.remove("hidden");
   App.init();
 }
+
+// ------------------------------------------------------------------ //
+// Hash router                                                         //
+// ------------------------------------------------------------------ //
+
+const Router = (() => {
+  const PAGES = ["now", "history", "schedule", "settings"];
+
+  function currentPage() {
+    const hash = location.hash.replace(/^#\//, "");
+    return PAGES.includes(hash) ? hash : "now";
+  }
+
+  function navigate() {
+    const page = currentPage();
+    PAGES.forEach(function(p) {
+      const pageEl = document.getElementById("page-" + p);
+      if (pageEl) {
+        if (p === page) {
+          pageEl.classList.remove("hidden");
+        } else {
+          pageEl.classList.add("hidden");
+        }
+      }
+    });
+
+    // Update active tab
+    document.querySelectorAll(".tab-item").forEach(function(tab) {
+      if (tab.dataset.page === page) {
+        tab.classList.add("active");
+      } else {
+        tab.classList.remove("active");
+      }
+    });
+
+    // Lazy-load page content
+    if (page === "history") {
+      Chart.loadBoth();
+    } else if (page === "schedule") {
+      Schedule.load();
+    } else if (page === "settings") {
+      Updater.init();
+    }
+  }
+
+  function init() {
+    window.addEventListener("hashchange", navigate);
+    navigate();
+  }
+
+  return { init, currentPage };
+})();
 
 // ------------------------------------------------------------------ //
 // API helpers                                                         //
@@ -125,36 +195,61 @@ async function apiFetch(url, options) {
 
 const Status = (() => {
   let timer = null;
+  let _lastData = null;
 
-  function fmtTemp(v) {
-    return (v != null) ? v.toFixed(1) + " °C" : "—";
+  function applyNowPage(data) {
+    // Status header card
+    const state = (data.commanded_state || "unknown").toLowerCase();
+    const headingEl = document.getElementById("st-status-label");
+    const badgeEl = document.getElementById("st-heating");
+    if (headingEl) headingEl.textContent = "STATUS — " + state.toUpperCase();
+    if (badgeEl) {
+      badgeEl.textContent = state.toUpperCase();
+      badgeEl.className = "value badge " + (state === "on" ? "on" : state === "off" ? "off" : "unknown");
+    }
+
+    // Temperatures
+    const indoorEl = document.getElementById("st-indoor");
+    const outdoorEl = document.getElementById("st-outdoor");
+    if (indoorEl) indoorEl.textContent = fmtTemp(data.indoor_temp_c);
+    if (outdoorEl) outdoorEl.textContent = fmtTemp(data.outdoor_temp_c);
+
+    // Last command
+    const lastCmdHeader = document.getElementById("lastcmd-header");
+    const reasonEl = document.getElementById("st-reason");
+    if (lastCmdHeader) {
+      const rel = relativeTime(data.last_tado_command_at);
+      lastCmdHeader.textContent = rel ? "LAST COMMAND — " + rel : "LAST COMMAND";
+    }
+    if (reasonEl) reasonEl.textContent = data.last_reason || "—";
+
+    // Control buttons active state
+    applyControlButtons(data);
   }
 
-  function fmtTime(ts) {
-    if (!ts) return "—";
-    return new Date(ts * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  function applyControlButtons(data) {
+    const btnOn   = document.getElementById("btn-force-on");
+    const btnOff  = document.getElementById("btn-force-off");
+    const btnAuto = document.getElementById("btn-resume");
+    if (!btnOn) return;
+
+    let active;
+    if (data.override_active && data.override_mode === "on")  active = "on";
+    else if (data.override_active && data.override_mode === "off") active = "off";
+    else active = "auto";
+
+    btnOn.classList.toggle("ctrl-active", active === "on");
+    btnOn.classList.toggle("ctrl-dull",   active !== "on");
+    btnOff.classList.toggle("ctrl-active", active === "off");
+    btnOff.classList.toggle("ctrl-dull",   active !== "off");
+    btnAuto.classList.toggle("ctrl-active", active === "auto");
+    btnAuto.classList.toggle("ctrl-dull",   active !== "auto");
   }
 
   function apply(data) {
-    const heating = document.getElementById("st-heating");
-    const state = (data.commanded_state || "unknown").toLowerCase();
-    heating.textContent = state.toUpperCase();
-    heating.className = "value badge " + (state === "on" ? "on" : state === "off" ? "off" : "unknown");
-
-    document.getElementById("st-window").textContent = data.active_window_name || "none";
-    document.getElementById("st-indoor").textContent = fmtTemp(data.indoor_temp_c);
-    document.getElementById("st-outdoor").textContent = fmtTemp(data.outdoor_temp_c);
-    document.getElementById("st-reason").textContent = data.last_reason || "—";
-    document.getElementById("st-lastcmd").textContent = fmtTime(data.last_tado_command_at);
-
-    const overrideEl = document.getElementById("st-override");
-    if (data.override_active && data.override_mode) {
-      overrideEl.textContent = data.override_mode.toUpperCase();
-      overrideEl.style.color = data.override_mode === "on" ? "var(--on-green)" : "var(--off-red)";
-    } else {
-      overrideEl.textContent = "none";
-      overrideEl.style.color = "";
-    }
+    _lastData = data;
+    applyNowPage(data);
+    NextSchedule.update(data);
   }
 
   async function poll() {
@@ -175,16 +270,19 @@ const Status = (() => {
     if (timer) clearInterval(timer);
   }
 
-  return { start, stop, poll };
+  function getData() { return _lastData; }
+
+  return { start, stop, poll, getData };
 })();
 
 // ------------------------------------------------------------------ //
-// Override buttons                                                    //
+// Override / control buttons                                          //
 // ------------------------------------------------------------------ //
 
 const Override = (() => {
   function showFeedback(msg, ok) {
     const feedEl = document.getElementById("override-feedback");
+    if (!feedEl) return;
     feedEl.textContent = msg;
     feedEl.className = "feedback " + (ok ? "ok" : "err");
     feedEl.classList.remove("hidden");
@@ -192,6 +290,27 @@ const Override = (() => {
   }
 
   async function send(mode) {
+    // Optimistic UI update
+    const fakeOverride = {
+      override_active: mode !== "auto",
+      override_mode: mode !== "auto" ? mode : null,
+    };
+    const current = Status.getData() || {};
+    const fakeData = Object.assign({}, current, fakeOverride);
+    // Apply just the button state optimistically
+    const btnOn   = document.getElementById("btn-force-on");
+    const btnOff  = document.getElementById("btn-force-off");
+    const btnAuto = document.getElementById("btn-resume");
+    if (btnOn) {
+      const active = mode;
+      btnOn.classList.toggle("ctrl-active", active === "on");
+      btnOn.classList.toggle("ctrl-dull",   active !== "on");
+      btnOff.classList.toggle("ctrl-active", active === "off");
+      btnOff.classList.toggle("ctrl-dull",   active !== "off");
+      btnAuto.classList.toggle("ctrl-active", active === "auto");
+      btnAuto.classList.toggle("ctrl-dull",   active !== "auto");
+    }
+
     try {
       const resp = await apiFetch("/api/override", {
         method: "POST",
@@ -199,24 +318,122 @@ const Override = (() => {
         body: JSON.stringify({ mode }),
       });
       if (resp.ok) {
-        showFeedback("Override: " + mode, true);
         Status.poll();
       } else {
         const d = await resp.json();
         showFeedback(d.error || "Error", false);
+        Status.poll(); // revert optimistic
       }
     } catch (e) {
       if (e.message !== "unauthorized") showFeedback("Network error", false);
+      Status.poll();
     }
   }
 
   function init() {
-    document.getElementById("btn-force-on").addEventListener("click", () => send("on"));
+    document.getElementById("btn-force-on").addEventListener("click",  () => send("on"));
     document.getElementById("btn-force-off").addEventListener("click", () => send("off"));
-    document.getElementById("btn-resume").addEventListener("click", () => send("auto"));
+    document.getElementById("btn-resume").addEventListener("click",    () => send("auto"));
   }
 
   return { init };
+})();
+
+// ------------------------------------------------------------------ //
+// Next schedule helper (computed client-side from /api/schedule)     //
+// ------------------------------------------------------------------ //
+
+const NextSchedule = (() => {
+  let _windows = [];
+
+  const DAY_NAMES = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+  const DAY_LABELS = { sun:"Sunday", mon:"Monday", tue:"Tuesday", wed:"Wednesday",
+                       thu:"Thursday", fri:"Friday", sat:"Saturday" };
+
+  function timeToMinutes(hhmm) {
+    const [h, m] = hhmm.split(":").map(Number);
+    return h * 60 + m;
+  }
+
+  function minutesToHHMM(mins) {
+    const h = Math.floor(((mins % 1440) + 1440) % 1440 / 60);
+    const m = ((mins % 1440) + 1440) % 1440 % 60;
+    return String(h).padStart(2, "0") + ":" + String(m).padStart(2, "0");
+  }
+
+  function compute() {
+    if (!_windows || _windows.length === 0) return null;
+    const now = new Date();
+    const todayDayIdx = now.getDay(); // 0=Sun
+    const todayName = DAY_NAMES[todayDayIdx];
+    const nowMins = now.getHours() * 60 + now.getMinutes();
+
+    // Check if any window is currently active
+    for (const w of _windows) {
+      if (!w.days.includes(todayName)) continue;
+      const start = timeToMinutes(w.start);
+      const end   = timeToMinutes(w.end);
+      const wraps = end <= start; // midnight-spanning window
+      const active = wraps
+        ? (nowMins >= start || nowMins < end)
+        : (nowMins >= start && nowMins < end);
+      if (active) {
+        // Currently active — find end time
+        let endStr;
+        if (wraps && nowMins >= start) {
+          endStr = minutesToHHMM(end);
+        } else {
+          endStr = minutesToHHMM(end);
+        }
+        return "Currently: " + w.name + " — ends at " + endStr;
+      }
+    }
+
+    // No active window — find next
+    let best = null;
+    let bestMinsFromNow = Infinity;
+
+    for (const w of _windows) {
+      const start = timeToMinutes(w.start);
+      for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
+        const checkDayIdx = (todayDayIdx + dayOffset) % 7;
+        const checkDayName = DAY_NAMES[checkDayIdx];
+        if (!w.days.includes(checkDayName)) continue;
+        const minsFromNow = dayOffset * 1440 + start - nowMins;
+        if (minsFromNow <= 0 && dayOffset === 0) continue; // already passed today
+        const adjusted = minsFromNow <= 0 ? minsFromNow + 7 * 1440 : minsFromNow;
+        if (adjusted < bestMinsFromNow) {
+          bestMinsFromNow = adjusted;
+          best = { w, dayOffset: dayOffset === 0 && start > nowMins ? 0 : dayOffset, dayName: checkDayName, start };
+        }
+      }
+    }
+
+    if (!best) return "No schedule configured.";
+
+    const startStr = minutesToHHMM(best.start);
+    if (best.dayOffset === 0) {
+      return "Next: " + best.w.name + " — starts at " + startStr + " today";
+    } else if (best.dayOffset === 1) {
+      return "Next: " + best.w.name + " — starts at " + startStr + " tomorrow";
+    } else {
+      return "Next: " + best.w.name + " — starts at " + startStr + " on " + DAY_LABELS[best.dayName];
+    }
+  }
+
+  function update() {
+    const el2 = document.getElementById("next-schedule-text");
+    if (!el2) return;
+    const text = compute();
+    el2.textContent = text || "No schedule configured.";
+  }
+
+  function setWindows(windows) {
+    _windows = windows || [];
+    update();
+  }
+
+  return { setWindows, update };
 })();
 
 // ------------------------------------------------------------------ //
@@ -248,8 +465,19 @@ const Chart = (() => {
     });
   }
 
-  function render(samples) {
-    const svg = document.getElementById("history-chart");
+  function downsample(samples, maxPoints) {
+    if (samples.length <= maxPoints) return samples;
+    const step = samples.length / maxPoints;
+    const result = [];
+    for (let i = 0; i < maxPoints; i++) {
+      result.push(samples[Math.round(i * step)]);
+    }
+    return result;
+  }
+
+  function render(svgId, samples) {
+    const svg = document.getElementById(svgId);
+    if (!svg) return;
     while (svg.firstChild) svg.removeChild(svg.firstChild);
 
     if (!samples || samples.length < 2) {
@@ -285,7 +513,7 @@ const Chart = (() => {
     function tx(ts) { return PAD.left + ((ts - tMin) / tRange) * chartW; }
     function ty(t)  { return PAD.top + chartH - ((t - tempMin) / tempRange) * chartH; }
 
-    // Heating state background bars.
+    // Heating state background bars
     let heatingStart = null;
     for (let i = 0; i < samples.length; i++) {
       const s = samples[i];
@@ -308,29 +536,47 @@ const Chart = (() => {
       }));
     }
 
-    // Indoor line.
+    // Indoor line
     const indoorPts = samples
       .filter(function(s) { return s.indoor_temp_c != null; })
       .map(function(s)   { return [tx(s.ts), ty(s.indoor_temp_c)]; });
     if (indoorPts.length > 1) svg.appendChild(polyline(indoorPts, "#4f8ef7"));
 
-    // Outdoor line.
+    // Outdoor line
     const outdoorPts = samples
       .filter(function(s) { return s.outdoor_temp_c != null; })
       .map(function(s)   { return [tx(s.ts), ty(s.outdoor_temp_c)]; });
     if (outdoorPts.length > 1) svg.appendChild(polyline(outdoorPts, "#f39c12"));
   }
 
-  async function load() {
+  async function load24() {
     try {
       const resp = await apiFetch("/api/history?hours=24");
-      if (resp.ok) render(await resp.json());
+      if (resp.ok) render("history-chart-24", await resp.json());
     } catch (e) {
       if (e.message !== "unauthorized") console.warn("History load error:", e);
     }
   }
 
-  return { load };
+  async function loadWeek() {
+    try {
+      const resp = await apiFetch("/api/history?hours=168");
+      if (resp.ok) {
+        const raw = await resp.json();
+        // Downsample to ~200 points for week view (one per ~50 min)
+        render("history-chart-week", downsample(raw, 200));
+      }
+    } catch (e) {
+      if (e.message !== "unauthorized") console.warn("Week history load error:", e);
+    }
+  }
+
+  function loadBoth() {
+    load24();
+    loadWeek();
+  }
+
+  return { loadBoth, load24 };
 })();
 
 // ------------------------------------------------------------------ //
@@ -353,6 +599,7 @@ const Schedule = (() => {
 
   function render() {
     const container = document.getElementById("schedule-list");
+    if (!container) return;
     while (container.firstChild) container.removeChild(container.firstChild);
 
     if (windows.length === 0) {
@@ -389,6 +636,7 @@ const Schedule = (() => {
       if (resp.ok) {
         windows = await resp.json();
         render();
+        NextSchedule.setWindows(windows);
       }
     } catch (e) {
       if (e.message !== "unauthorized") console.warn("Schedule load error:", e);
@@ -407,6 +655,7 @@ const Schedule = (() => {
     }
     windows = newWindows;
     render();
+    NextSchedule.setWindows(windows);
   }
 
   function getWindows() { return windows; }
@@ -561,9 +810,11 @@ const WindowModal = (() => {
 // ------------------------------------------------------------------ //
 
 const Updater = (function() {
+  let _inited = false;
+
   const versionEl = () => document.getElementById("sys-version");
-  const feedEl = () => document.getElementById("update-feedback");
-  const btn = () => document.getElementById("btn-check-update");
+  const feedEl    = () => document.getElementById("update-feedback");
+  const btn       = () => document.getElementById("btn-check-update");
 
   async function fetchVersion() {
     try {
@@ -575,16 +826,18 @@ const Updater = (function() {
   }
 
   function showFeedback(msg, cls) {
-    const el = feedEl();
-    el.textContent = msg;
-    el.className = "feedback " + (cls || "");
+    const e = feedEl();
+    if (!e) return;
+    e.textContent = msg;
+    e.className = "feedback " + (cls || "");
+    e.classList.remove("hidden");
   }
 
   async function checkForUpdate() {
     const b = btn();
     b.disabled = true;
     const before = await fetchVersion();
-    versionEl().textContent = before || "unknown";
+    if (versionEl()) versionEl().textContent = before || "unknown";
     showFeedback("Checking for updates...", "");
 
     let resp;
@@ -602,7 +855,6 @@ const Updater = (function() {
       return;
     }
 
-    // Poll /api/version every 4s for up to 90s.
     showFeedback("Update triggered — waiting for restart...", "");
     const startedAt = Date.now();
     const poll = async () => {
@@ -613,13 +865,11 @@ const Updater = (function() {
       }
       const now = await fetchVersion();
       if (now && before && now !== before) {
-        versionEl().textContent = now;
+        if (versionEl()) versionEl().textContent = now;
         showFeedback("Updated to " + now + ". Service restarted.", "ok");
         b.disabled = false;
         return;
       }
-      // After 30s with no change, declare up-to-date (the service would
-      // have restarted by now if there was anything to pull).
       if (Date.now() - startedAt > 30000 && now === before) {
         showFeedback("Already up to date (" + before + ").", "");
         b.disabled = false;
@@ -631,9 +881,66 @@ const Updater = (function() {
   }
 
   async function init() {
+    if (_inited) return;
+    _inited = true;
     const v = await fetchVersion();
-    versionEl().textContent = v || "unknown";
-    btn().addEventListener("click", checkForUpdate);
+    if (versionEl()) versionEl().textContent = v || "unknown";
+    const b = btn();
+    if (b) b.addEventListener("click", checkForUpdate);
+  }
+
+  return { init };
+})();
+
+// ------------------------------------------------------------------ //
+// Change PIN                                                          //
+// ------------------------------------------------------------------ //
+
+const PinChange = (() => {
+  function showFeedback(msg, ok) {
+    const feedEl = document.getElementById("pin-change-feedback");
+    if (!feedEl) return;
+    feedEl.textContent = msg;
+    feedEl.className = "feedback " + (ok ? "ok" : "err");
+    feedEl.classList.remove("hidden");
+    setTimeout(() => feedEl.classList.add("hidden"), 3000);
+  }
+
+  async function submit() {
+    const newPin     = (document.getElementById("pin-new").value     || "").trim();
+    const confirmPin = (document.getElementById("pin-confirm").value || "").trim();
+
+    if (!/^\d{4}$/.test(newPin)) {
+      showFeedback("PIN must be exactly 4 digits.", false);
+      return;
+    }
+    if (newPin !== confirmPin) {
+      showFeedback("PINs do not match.", false);
+      return;
+    }
+
+    try {
+      const resp = await apiFetch("/api/pin", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ new_pin: newPin }),
+      });
+      if (resp.ok) {
+        showFeedback("PIN changed successfully.", true);
+        document.getElementById("pin-new").value = "";
+        document.getElementById("pin-confirm").value = "";
+      } else {
+        const d = await resp.json().catch(() => ({}));
+        showFeedback(d.error || "Failed to change PIN.", false);
+      }
+    } catch (e) {
+      if (e.message !== "unauthorized") showFeedback("Network error.", false);
+    }
+  }
+
+  function init() {
+    const btn = document.getElementById("btn-change-pin");
+    if (btn) btn.addEventListener("click", submit);
   }
 
   return { init };
@@ -644,10 +951,13 @@ const Updater = (function() {
 // ------------------------------------------------------------------ //
 
 function initLogout() {
-  document.getElementById("btn-logout").addEventListener("click", async function() {
-    await fetch("/api/logout", { method: "POST" });
-    showPinScreen();
-  });
+  const btn = document.getElementById("btn-logout");
+  if (btn) {
+    btn.addEventListener("click", async function() {
+      await fetch("/api/logout", { method: "POST" });
+      showPinScreen();
+    });
+  }
 }
 
 // ------------------------------------------------------------------ //
@@ -660,14 +970,24 @@ const App = (function() {
   function init() {
     if (started) return;
     started = true;
+
+    Router.init();
     Override.init();
     WindowModal.init();
-    Updater.init();
+    PinChange.init();
     initLogout();
-    Status.start();
-    Chart.load();
+
+    // Load schedule once at startup for the NextSchedule widget on Now page
     Schedule.load();
-    setInterval(Chart.load, 60000);
+
+    Status.start();
+
+    // Reload chart every 60s if history page is visible
+    setInterval(function() {
+      if (Router.currentPage() === "history") {
+        Chart.loadBoth();
+      }
+    }, 60000);
   }
 
   return { init: init };

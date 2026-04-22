@@ -35,7 +35,7 @@ from flask import (
 )
 
 from .auth import COOKIE_NAME, COOKIE_MAX_AGE_DAYS, check_pin, make_cookie_value, verify_cookie_value
-from .config_writer import write_schedule
+from .config_writer import write_schedule, write_http_pin
 from .history import HistoryBuffer
 from .schedule import Window, parse_schedule
 from .state import SharedState
@@ -81,7 +81,28 @@ def make_app(
     # Mutable reference so PUT /api/schedule can update the in-memory list.
     _schedule: list[Window] = schedule_windows
 
-    auth_required = _require_pin_cookie(pin)
+    # Wrap pin in a dict so the POST /api/pin handler can update it live
+    # without re-closing over a reassigned local.  The auth decorator reads
+    # _pin_ref["value"] on every request.
+    _pin_ref: dict = {"value": pin}
+
+    def _check_pin_cookie() -> bool:
+        """Return True if the request carries a valid session cookie."""
+        if _pin_ref["value"] is None:
+            return True
+        cookie_val = request.cookies.get(COOKIE_NAME, "")
+        return verify_cookie_value(cookie_val)
+
+    def auth_required(f):
+        from functools import wraps
+
+        @wraps(f)
+        def wrapped(*args, **kwargs):
+            if not _check_pin_cookie():
+                return jsonify({"error": "unauthorized"}), 401
+            return f(*args, **kwargs)
+
+        return wrapped
 
     # ------------------------------------------------------------------
     # No-auth endpoints
@@ -116,7 +137,7 @@ def make_app(
     def api_auth():
         body = request.get_json(force=True, silent=True) or {}
         provided_pin = str(body.get("pin", ""))
-        if pin is None:
+        if _pin_ref["value"] is None:
             # No PIN configured — always succeed.
             cookie_val = make_cookie_value()
             resp = make_response(jsonify({"ok": True}))
@@ -128,7 +149,7 @@ def make_app(
                 samesite="Lax",
             )
             return resp
-        if not check_pin(provided_pin, pin):
+        if not check_pin(provided_pin, _pin_ref["value"]):
             return jsonify({"error": "incorrect PIN"}), 401
         cookie_val = make_cookie_value()
         resp = make_response(jsonify({"ok": True}))
@@ -147,6 +168,26 @@ def make_app(
         resp.delete_cookie(COOKIE_NAME)
         return resp
 
+    @app.post("/api/pin")
+    @auth_required
+    def api_change_pin():
+        """Change the HTTP PIN.  Body: {"new_pin": "1234"}."""
+        body = request.get_json(force=True, silent=True) or {}
+        new_pin = str(body.get("new_pin", "")).strip()
+        import re as _re
+        if not _re.match(r"^\d{4}$", new_pin):
+            return jsonify({"error": "PIN must be exactly 4 digits."}), 400
+        try:
+            write_http_pin(config_path, new_pin)
+        except (OSError, ValueError) as e:
+            log.error("Failed to write new PIN to config: %s", e)
+            return jsonify({"error": f"failed to persist: {e}"}), 500
+        # Update in-memory pin so future auth checks use the new value
+        # without requiring a service restart.
+        _pin_ref["value"] = new_pin
+        log.info("HTTP PIN changed via API.")
+        return jsonify({"ok": True})
+
     # ------------------------------------------------------------------
     # Web UI — serves index.html; JS fetches the API endpoints
     # ------------------------------------------------------------------
@@ -154,11 +195,7 @@ def make_app(
     @app.get("/")
     def web_ui():
         # Check auth — redirect to PIN page handled client-side.
-        if pin is not None:
-            cookie_val = request.cookies.get(COOKIE_NAME, "")
-            if not verify_cookie_value(cookie_val):
-                # Still serve the page — JS will show the PIN screen.
-                pass
+        # Always serve the page; JS will show the PIN screen if not authed.
         return send_from_directory(str(_WEB_DIR), "index.html")
 
     @app.get("/app.css")
