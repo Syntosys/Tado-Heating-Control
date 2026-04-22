@@ -289,24 +289,47 @@ def make_app(
     @app.post("/api/update")
     @auth_required
     def api_update():
-        # Fire-and-forget: trigger the systemd oneshot update service.
-        # It pulls, chowns, and restarts heating-brain if there are changes.
-        # Requires sudoers entry permitting:
-        #   heating-brain ALL=(root) NOPASSWD: /bin/systemctl start heating-brain-update.service
+        # Two-phase: first fetch from origin and see whether we're behind.
+        # If not, return {"updated": false} immediately — no restart needed.
+        # If behind, trigger the systemd oneshot (fire-and-forget, detached
+        # so it survives this process restarting) and return the target commit.
+        repo_dir = "/opt/heating-brain"
+        git_base = ["git", "-C", repo_dir, "-c", f"safe.directory={repo_dir}"]
         try:
-            # Command args MUST match the sudoers entry exactly (no extra flags).
-            proc = subprocess.run(
-                ["sudo", "-n", "/usr/bin/systemctl", "start", "heating-brain-update.service"],
-                capture_output=True, timeout=60,
+            subprocess.run(
+                git_base + ["fetch", "--quiet", "origin", "main"],
+                capture_output=True, timeout=30,
             )
-            if proc.returncode != 0:
-                return jsonify({
-                    "error": "failed to trigger update",
-                    "stderr": proc.stderr.decode(errors="replace").strip(),
-                }), 500
-            return jsonify({"triggered": True}), 202
+            local = subprocess.check_output(
+                git_base + ["rev-parse", "HEAD"],
+                timeout=5,
+            ).decode().strip()
+            remote = subprocess.check_output(
+                git_base + ["rev-parse", "origin/main"],
+                timeout=5,
+            ).decode().strip()
         except (subprocess.SubprocessError, FileNotFoundError) as e:
-            return jsonify({"error": f"update failed: {e}"}), 500
+            return jsonify({"error": f"git failed: {e}"}), 500
+
+        if local == remote:
+            return jsonify({"updated": False, "version": local[:7]})
+
+        # Fire-and-forget so the handler can return before heating-brain
+        # gets restarted by the oneshot. start_new_session detaches the
+        # subprocess so it survives our own restart.
+        try:
+            subprocess.Popen(
+                ["sudo", "-n", "/usr/bin/systemctl", "start", "heating-brain-update.service"],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+        except (OSError, FileNotFoundError) as e:
+            return jsonify({"error": f"trigger failed: {e}"}), 500
+        return jsonify({
+            "updated": True,
+            "before": local[:7],
+            "after": remote[:7],
+        }), 202
 
     @app.get("/api/history")
     @auth_required

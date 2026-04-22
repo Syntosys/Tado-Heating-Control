@@ -844,26 +844,33 @@ const Updater = (function() {
   async function checkForUpdate() {
     const b = btn();
     b.disabled = true;
-    const before = await fetchVersion();
-    if (versionEl()) versionEl().textContent = before || "unknown";
     showFeedback("Checking for updates...", "");
 
-    let resp;
+    let resp, data;
     try {
       resp = await apiFetch("/api/update", { method: "POST" });
+      data = await resp.json();
     } catch (e) {
       showFeedback("Request failed: " + e.message, "err");
       b.disabled = false;
       return;
     }
-    if (!resp.ok) {
-      const body = await resp.json().catch(() => ({}));
-      showFeedback("Trigger failed: " + (body.error || resp.status), "err");
+    if (resp.status >= 400) {
+      showFeedback("Trigger failed: " + (data && data.error || resp.status), "err");
       b.disabled = false;
       return;
     }
 
-    showFeedback("Update triggered — waiting for restart...", "");
+    if (!data.updated) {
+      if (versionEl()) versionEl().textContent = data.version || "unknown";
+      showFeedback("Already up to date (" + (data.version || "?") + ").", "");
+      b.disabled = false;
+      return;
+    }
+
+    // Update triggered. Poll /api/version until it flips to the target commit.
+    showFeedback("Updating " + data.before + " → " + data.after + "...", "");
+    const target = data.after;
     const startedAt = Date.now();
     const poll = async () => {
       if (Date.now() - startedAt > 90000) {
@@ -872,20 +879,15 @@ const Updater = (function() {
         return;
       }
       const now = await fetchVersion();
-      if (now && before && now !== before) {
+      if (now === target) {
         if (versionEl()) versionEl().textContent = now;
-        showFeedback("Updated to " + now + ". Service restarted.", "ok");
+        showFeedback("Updated to " + now + ".", "ok");
         b.disabled = false;
         return;
       }
-      if (Date.now() - startedAt > 30000 && now === before) {
-        showFeedback("Already up to date (" + before + ").", "");
-        b.disabled = false;
-        return;
-      }
-      setTimeout(poll, 4000);
+      setTimeout(poll, 2000);
     };
-    setTimeout(poll, 4000);
+    setTimeout(poll, 2000);
   }
 
   async function init() {
