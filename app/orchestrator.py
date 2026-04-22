@@ -193,8 +193,11 @@ class Orchestrator:
         if decision.desired_state == self._commanded_state:
             return  # nothing to do
 
+        is_override = decision.extras.get("rule_fired") == "override"
+
         # Min-state-change interval (skip the first transition so startup applies immediately).
-        if self._last_state_change_at > 0:
+        # Manual overrides bypass this guard — user action should take effect now.
+        if self._last_state_change_at > 0 and not is_override:
             since = time.time() - self._last_state_change_at
             if since < self.min_state_change_interval:
                 log.debug(
