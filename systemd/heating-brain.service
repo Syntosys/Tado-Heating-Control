@@ -13,7 +13,10 @@ Restart=on-failure
 RestartSec=10
 
 # Security hardening
-NoNewPrivileges=true
+# NoNewPrivileges is intentionally NOT set here: the /api/update endpoint
+# shells out via sudo to trigger the update oneshot service, which needs
+# to gain privileges. The sudoers rule limits the service user to a
+# single exact command so this remains tightly scoped.
 ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
