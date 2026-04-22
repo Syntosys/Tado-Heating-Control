@@ -211,8 +211,15 @@ def make_app(
     # ------------------------------------------------------------------
 
     @app.get("/status")
-    @auth_required
     def status():
+        # Legacy endpoint for MagicMirror² and other local integrations.
+        # Auth-free when called from localhost (same-Pi tile viewers);
+        # requires PIN cookie otherwise so a LAN snoop can't read state.
+        remote = (request.remote_addr or "").split("%")[0]
+        if remote in ("127.0.0.1", "::1", "localhost") or not _pin_ref["value"]:
+            return jsonify(state.snapshot())
+        if not _check_pin_cookie():
+            return jsonify({"error": "unauthorized"}), 401
         return jsonify(state.snapshot())
 
     @app.get("/api/status")
