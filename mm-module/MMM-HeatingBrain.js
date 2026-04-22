@@ -54,6 +54,7 @@ Module.register("MMM-HeatingBrain", {
 			})
 			.catch((err) => {
 				this.lastFetchError = err.message || String(err);
+				Log.error("[MMM-HeatingBrain] fetch failed for " + this.config.brainUrl + "/status: " + this.lastFetchError);
 				this.updateDom(300);
 			});
 	},
