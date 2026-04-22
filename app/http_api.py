@@ -75,6 +75,7 @@ def make_app(
     sensor_token: Optional[str] = None,
     pin: Optional[str] = None,
     override_expiry_minutes: int = 120,
+    wake=None,
 ) -> Flask:
     app = Flask(__name__, static_folder=None)
     # Mutable reference so PUT /api/schedule can update the in-memory list.
@@ -214,9 +215,13 @@ def make_app(
         mode = body.get("mode", "")
         if mode == "auto":
             state.clear_override()
+            if wake is not None:
+                wake.set()
             return jsonify({"ok": True, "mode": "auto"})
         if mode in ("on", "off"):
             state.set_override(mode, override_expiry_minutes)
+            if wake is not None:
+                wake.set()
             return jsonify({"ok": True, "mode": mode})
         return jsonify({"error": "mode must be 'on', 'off', or 'auto'"}), 400
 
@@ -245,9 +250,10 @@ def make_app(
         # Requires sudoers entry permitting:
         #   heating-brain ALL=(root) NOPASSWD: /bin/systemctl start heating-brain-update.service
         try:
+            # Command args MUST match the sudoers entry exactly (no extra flags).
             proc = subprocess.run(
-                ["sudo", "-n", "/bin/systemctl", "start", "--no-block", "heating-brain-update.service"],
-                capture_output=True, timeout=10,
+                ["sudo", "-n", "/bin/systemctl", "start", "heating-brain-update.service"],
+                capture_output=True, timeout=60,
             )
             if proc.returncode != 0:
                 return jsonify({

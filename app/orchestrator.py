@@ -90,6 +90,7 @@ class Orchestrator:
         self._commanded_state: HeatingState = HeatingState.UNKNOWN
         self._last_state_change_at: float = 0.0
         self._stop = threading.Event()
+        self._wake = threading.Event()  # set by HTTP handlers to nudge the loop immediately
 
     # ------------------------------------------------------------------
     @staticmethod
@@ -295,10 +296,9 @@ class Orchestrator:
             except Exception as e:
                 log.exception("Tick failed: %s", e)
                 self.state.update(last_error=str(e), last_error_at=time.time())
-            slept = 0.0
-            while slept < self.tado_interval and not self._stop.is_set():
-                time.sleep(1.0)
-                slept += 1.0
+            # Sleep until next tick OR until woken by an HTTP action (override/etc).
+            self._wake.wait(timeout=self.tado_interval)
+            self._wake.clear()
 
     # ------------------------------------------------------------------
     def run(self) -> None:
@@ -315,6 +315,7 @@ class Orchestrator:
             sensor_token=sensor_token,
             pin=pin,
             override_expiry_minutes=self.override_expiry_minutes,
+            wake=self._wake,
         )
         api_thread = threading.Thread(
             target=lambda: app.run(host=host, port=port, debug=False, use_reloader=False),
