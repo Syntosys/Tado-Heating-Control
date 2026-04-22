@@ -3,8 +3,9 @@
 # Pulls latest from GitHub, reinstalls deps if requirements changed,
 # fixes ownership, and restarts the service only if anything changed.
 #
-# Run as the user that owns /opt/heating-brain (the one who cloned it),
-# not as heating-brain (which has no shell).
+# Runs as root via the systemd oneshot. The repo is owned by
+# heating-brain so every git call passes safe.directory inline to
+# sidestep git's CVE-2022-24765 ownership check.
 
 set -euo pipefail
 
@@ -12,11 +13,11 @@ REPO_DIR="/opt/heating-brain"
 SERVICE_USER="heating-brain"
 SERVICE_NAME="heating-brain"
 
-cd "$REPO_DIR"
+GIT=(git -C "$REPO_DIR" -c "safe.directory=$REPO_DIR")
 
-before=$(git rev-parse HEAD)
-git fetch --quiet origin main
-after=$(git rev-parse origin/main)
+before=$("${GIT[@]}" rev-parse HEAD)
+"${GIT[@]}" fetch --quiet origin main
+after=$("${GIT[@]}" rev-parse origin/main)
 
 if [ "$before" = "$after" ]; then
     echo "Already up to date at $before"
@@ -24,16 +25,15 @@ if [ "$before" = "$after" ]; then
 fi
 
 echo "Updating $before -> $after"
-git pull --ff-only --quiet origin main
+"${GIT[@]}" pull --ff-only --quiet origin main
 
 # Reinstall Python deps only if requirements.txt changed in this pull.
-if git diff --name-only "$before" "$after" | grep -q '^app/requirements.txt$'; then
+if "${GIT[@]}" diff --name-only "$before" "$after" | grep -q '^app/requirements.txt$'; then
     echo "requirements.txt changed — reinstalling"
-    ./venv/bin/pip install --quiet -r app/requirements.txt
+    "$REPO_DIR/venv/bin/pip" install --quiet -r "$REPO_DIR/app/requirements.txt"
 fi
 
 # Fix ownership so the service user can read new files.
-# (Script runs as root via the systemd oneshot — no sudo needed.)
 chown -R "$SERVICE_USER":"$SERVICE_USER" "$REPO_DIR"
 
 echo "Restarting $SERVICE_NAME"
