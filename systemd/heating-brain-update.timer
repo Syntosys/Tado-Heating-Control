@@ -1,0 +1,12 @@
+[Unit]
+Description=Run heating-brain auto-update daily
+
+[Timer]
+# Every day at 04:17 local time (odd minute avoids thundering herd).
+OnCalendar=*-*-* 04:17:00
+# If the Pi was off at the scheduled time, run on next boot.
+Persistent=true
+RandomizedDelaySec=5m
+
+[Install]
+WantedBy=timers.target

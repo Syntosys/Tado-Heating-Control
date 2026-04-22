@@ -1,0 +1,13 @@
+[Unit]
+Description=heating-brain auto-update (git pull + restart if changed)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+# Replace %i if you want to parameterise the user; the ExecStart below
+# assumes the user who runs this has sudo rights for chown + systemctl restart.
+# The update.sh script handles everything.
+ExecStart=/opt/heating-brain/scripts/update.sh
+StandardOutput=journal
+StandardError=journal
