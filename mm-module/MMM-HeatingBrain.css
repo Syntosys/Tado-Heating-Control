@@ -1,12 +1,14 @@
-/* MMM-HeatingBrain — sized up to match the mobile UI, muted to fit MM²'s dark aesthetic */
+/* MMM-HeatingBrain — mirrors the mobile UI palette (green/red/blue). */
 
 .heating-brain {
 	font-family: "Roboto Condensed", sans-serif;
-	color: #ddd;
+	color: #e2e4f0;
 	min-width: 520px;
 	max-width: 640px;
 	text-align: left;
 }
+
+/* --- Status pill ---------------------------------------------------- */
 
 .hb-pill {
 	display: inline-block;
@@ -15,25 +17,27 @@
 	border-radius: 999px;
 	font-size: 1.9em;
 	letter-spacing: 3px;
-	font-weight: 300;
-	border: 1px solid #555;
+	font-weight: 400;
+	border: 1px solid #2e3350;
 }
 .hb-pill-on {
-	color: #ffb26b;
-	border-color: #b86a30;
-	background: rgba(184, 106, 48, 0.12);
+	color: #2ecc71;
+	border-color: rgba(46, 204, 113, 0.55);
+	background: rgba(46, 204, 113, 0.18);
 }
 .hb-pill-off {
-	color: #7cc0ff;
-	border-color: #3a6a95;
-	background: rgba(58, 106, 149, 0.12);
+	color: #e74c3c;
+	border-color: rgba(231, 76, 60, 0.55);
+	background: rgba(231, 76, 60, 0.18);
 }
 .hb-pill-unknown {
-	color: #888;
+	color: #8890b0;
 }
 .hb-stale {
 	opacity: 0.4;
 }
+
+/* --- Temperature tiles --------------------------------------------- */
 
 .hb-temps {
 	display: flex;
@@ -44,87 +48,103 @@
 .hb-temp {
 	flex: 1;
 	text-align: center;
-	padding: 12px 8px;
-	border: 1px solid #2a2a2a;
-	border-radius: 10px;
-	background: rgba(255, 255, 255, 0.02);
+	padding: 14px 8px;
+	border: 1px solid #2e3350;
+	border-radius: 12px;
+	background: #1a1d27;
 }
 .hb-temp-label {
-	font-size: 0.85em;
+	font-size: 0.8em;
 	text-transform: uppercase;
 	letter-spacing: 2.5px;
-	color: #888;
+	color: #8890b0;
 	margin-bottom: 4px;
 }
 .hb-temp-value {
 	font-size: 2.2em;
 	font-weight: 300;
 	margin: 2px 0;
-	color: #f0f0f0;
+	color: #e2e4f0;
 }
 .hb-temp-age {
 	font-size: 0.8em;
 }
 
+/* --- Control buttons — green / red / blue, active = vibrant ------- */
+
 .hb-ctrl-row {
 	display: flex;
-	gap: 14px;
+	gap: 12px;
 	margin: 6px 0 12px;
 }
 .hb-btn {
 	flex: 1;
-	padding: 14px 0;
+	padding: 16px 0;
 	font-family: inherit;
 	font-size: 1.25em;
 	letter-spacing: 3px;
 	text-transform: uppercase;
-	border-radius: 10px;
-	background: transparent;
-	color: #ddd;
-	border: 1px solid #555;
+	font-weight: 600;
+	border-radius: 12px;
 	cursor: pointer;
-	transition: background 120ms ease, border-color 120ms ease, color 120ms ease, opacity 120ms ease;
+	transition: background 150ms ease, color 150ms ease, border-color 150ms ease, opacity 150ms ease;
 }
-.hb-btn:hover {
-	background: rgba(255, 255, 255, 0.06);
+
+/* Dull — coloured tint at low intensity (default state for inactive buttons) */
+.hb-btn-on {
+	background: rgba(46, 204, 113, 0.15);
+	color: rgba(46, 204, 113, 0.75);
+	border: 1px solid rgba(46, 204, 113, 0.35);
 }
-.hb-btn-dull {
-	opacity: 0.55;
+.hb-btn-off {
+	background: rgba(231, 76, 60, 0.15);
+	color: rgba(231, 76, 60, 0.80);
+	border: 1px solid rgba(231, 76, 60, 0.35);
 }
-.hb-btn-active {
-	opacity: 1;
-	font-weight: 400;
+.hb-btn-auto {
+	background: rgba(79, 142, 247, 0.15);
+	color: rgba(79, 142, 247, 0.85);
+	border: 1px solid rgba(79, 142, 247, 0.35);
 }
-.hb-btn-on.hb-btn-active {
-	color: #ffb26b;
-	border-color: #b86a30;
-	background: rgba(184, 106, 48, 0.18);
+
+/* Active — solid, vibrant */
+.hb-btn.hb-btn-active.hb-btn-on {
+	background: #2ecc71;
+	color: #000;
+	border: 1px solid #2ecc71;
 }
-.hb-btn-off.hb-btn-active {
-	color: #7cc0ff;
-	border-color: #3a6a95;
-	background: rgba(58, 106, 149, 0.18);
+.hb-btn.hb-btn-active.hb-btn-off {
+	background: #e74c3c;
+	color: #fff;
+	border: 1px solid #e74c3c;
 }
-.hb-btn-auto.hb-btn-active {
-	color: #b8e0a8;
-	border-color: #4e7a3d;
-	background: rgba(78, 122, 61, 0.18);
+.hb-btn.hb-btn-active.hb-btn-auto {
+	background: #4f8ef7;
+	color: #fff;
+	border: 1px solid #4f8ef7;
 }
+
 .hb-btn-pending {
 	opacity: 0.5;
 	cursor: progress;
 }
+.hb-btn:hover {
+	filter: brightness(1.12);
+}
+
+/* --- Meta / reason / errors ---------------------------------------- */
 
 .hb-ctrl-meta {
 	margin-top: -2px;
 	margin-bottom: 10px;
 	letter-spacing: 1.5px;
 	text-transform: uppercase;
+	color: #8890b0;
 }
 
 .hb-reason {
 	font-style: italic;
-	color: #999;
+	color: #8890b0;
 	font-size: 0.9em;
 	margin-top: 4px;
 }
