@@ -233,17 +233,20 @@ const Status = (() => {
     const btnAuto = document.getElementById("btn-resume");
     if (!btnOn) return;
 
-    let active;
-    if (data.override_active && data.override_mode === "on")  active = "on";
-    else if (data.override_active && data.override_mode === "off") active = "off";
-    else active = "auto";
+    // Auto is active when no override is in force.
+    // On/Off reflect the *current* commanded heating state, so the user can
+    // see both what mode they're in AND what the heating is currently doing.
+    const state = (data.commanded_state || "unknown").toLowerCase();
+    const autoActive = !data.override_active;
+    const onActive   = state === "on";
+    const offActive  = state === "off";
 
-    btnOn.classList.toggle("ctrl-active", active === "on");
-    btnOn.classList.toggle("ctrl-dull",   active !== "on");
-    btnOff.classList.toggle("ctrl-active", active === "off");
-    btnOff.classList.toggle("ctrl-dull",   active !== "off");
-    btnAuto.classList.toggle("ctrl-active", active === "auto");
-    btnAuto.classList.toggle("ctrl-dull",   active !== "auto");
+    btnOn.classList.toggle("ctrl-active", onActive);
+    btnOn.classList.toggle("ctrl-dull",   !onActive);
+    btnOff.classList.toggle("ctrl-active", offActive);
+    btnOff.classList.toggle("ctrl-dull",   !offActive);
+    btnAuto.classList.toggle("ctrl-active", autoActive);
+    btnAuto.classList.toggle("ctrl-dull",   !autoActive);
   }
 
   function apply(data) {
@@ -302,13 +305,18 @@ const Override = (() => {
     const btnOff  = document.getElementById("btn-force-off");
     const btnAuto = document.getElementById("btn-resume");
     if (btnOn) {
-      const active = mode;
-      btnOn.classList.toggle("ctrl-active", active === "on");
-      btnOn.classList.toggle("ctrl-dull",   active !== "on");
-      btnOff.classList.toggle("ctrl-active", active === "off");
-      btnOff.classList.toggle("ctrl-dull",   active !== "off");
-      btnAuto.classList.toggle("ctrl-active", active === "auto");
-      btnAuto.classList.toggle("ctrl-dull",   active !== "auto");
+      // Optimistic: assume the chosen mode takes effect.
+      // On → state becomes on + not-auto. Off → state off + not-auto. Auto → keep current state + auto.
+      const currentState = ((Status.getData() || {}).commanded_state || "").toLowerCase();
+      const onActive   = mode === "on"  || (mode === "auto" && currentState === "on");
+      const offActive  = mode === "off" || (mode === "auto" && currentState === "off");
+      const autoActive = mode === "auto";
+      btnOn.classList.toggle("ctrl-active", onActive);
+      btnOn.classList.toggle("ctrl-dull",   !onActive);
+      btnOff.classList.toggle("ctrl-active", offActive);
+      btnOff.classList.toggle("ctrl-dull",   !offActive);
+      btnAuto.classList.toggle("ctrl-active", autoActive);
+      btnAuto.classList.toggle("ctrl-dull",   !autoActive);
     }
 
     try {

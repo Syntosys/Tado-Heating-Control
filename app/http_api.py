@@ -289,7 +289,7 @@ def make_app(
         try:
             # Command args MUST match the sudoers entry exactly (no extra flags).
             proc = subprocess.run(
-                ["sudo", "-n", "/bin/systemctl", "start", "heating-brain-update.service"],
+                ["sudo", "-n", "/usr/bin/systemctl", "start", "heating-brain-update.service"],
                 capture_output=True, timeout=60,
             )
             if proc.returncode != 0:

@@ -30,7 +30,7 @@ import yaml
 from .decision import Decision, DecisionInputs, HeatingState, decide
 from .history import HistoryBuffer, HistorySample
 from .http_api import make_app
-from .schedule import parse_schedule
+from .schedule import active_window, parse_schedule
 from .state import SharedState
 from .tado_client import TadoClient
 from .weather import WeatherProvider
@@ -89,6 +89,7 @@ class Orchestrator:
         self._zone_id: Optional[int] = self.config["tado"].get("zone_id")
         self._commanded_state: HeatingState = HeatingState.UNKNOWN
         self._last_state_change_at: float = 0.0
+        self._last_active_window_name: Optional[str] = None
         self._stop = threading.Event()
         self._wake = threading.Event()  # set by HTTP handlers to nudge the loop immediately
 
@@ -240,6 +241,25 @@ class Orchestrator:
         indoor = self._get_indoor_temp()
 
         outdoor_temp = outdoor.temperature_celsius if outdoor else None
+
+        # Auto-clear manual override when a new schedule window just started.
+        # Rationale: user pressed On/Off manually — that hold lasts until the
+        # next natural scheduled transition, at which point the schedule takes
+        # over again. Without this, an override would persist forever.
+        now = dt.datetime.now()
+        current_window = active_window(self.schedule_windows, now)
+        current_window_name = current_window.name if current_window else None
+        if (
+            current_window_name is not None
+            and current_window_name != self._last_active_window_name
+            and self.state.get_override() is not None
+        ):
+            log.info(
+                "Schedule window '%s' started — clearing manual override.",
+                current_window_name,
+            )
+            self.state.clear_override()
+        self._last_active_window_name = current_window_name
 
         # Check for active manual override — applies before decision engine.
         override = self.state.get_override()

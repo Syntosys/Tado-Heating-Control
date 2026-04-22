@@ -33,9 +33,10 @@ if git diff --name-only "$before" "$after" | grep -q '^app/requirements.txt$'; t
 fi
 
 # Fix ownership so the service user can read new files.
-sudo chown -R "$SERVICE_USER":"$SERVICE_USER" "$REPO_DIR"
+# (Script runs as root via the systemd oneshot — no sudo needed.)
+chown -R "$SERVICE_USER":"$SERVICE_USER" "$REPO_DIR"
 
 echo "Restarting $SERVICE_NAME"
-sudo systemctl restart "$SERVICE_NAME"
+/usr/bin/systemctl restart "$SERVICE_NAME"
 
 echo "Update complete."
