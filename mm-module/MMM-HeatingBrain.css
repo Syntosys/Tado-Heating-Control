@@ -1,29 +1,32 @@
-/* MMM-HeatingBrain styles — muted so it fits MagicMirror's default dark aesthetic */
+/* MMM-HeatingBrain — sized up to match the mobile UI, muted to fit MM²'s dark aesthetic */
 
 .heating-brain {
 	font-family: "Roboto Condensed", sans-serif;
 	color: #ddd;
-	min-width: 300px;
+	min-width: 520px;
+	max-width: 640px;
+	text-align: left;
 }
 
 .hb-pill {
 	display: inline-block;
-	padding: 6px 14px;
-	margin-bottom: 12px;
-	border-radius: 20px;
-	font-size: 1.1em;
-	letter-spacing: 2px;
+	padding: 14px 28px;
+	margin-bottom: 22px;
+	border-radius: 999px;
+	font-size: 1.9em;
+	letter-spacing: 3px;
+	font-weight: 300;
 	border: 1px solid #555;
 }
 .hb-pill-on {
-	color: #ffb26b;           /* warm amber */
+	color: #ffb26b;
 	border-color: #b86a30;
-	background: rgba(184, 106, 48, 0.08);
+	background: rgba(184, 106, 48, 0.12);
 }
 .hb-pill-off {
-	color: #7cc0ff;           /* cool blue */
+	color: #7cc0ff;
 	border-color: #3a6a95;
-	background: rgba(58, 106, 149, 0.08);
+	background: rgba(58, 106, 149, 0.12);
 }
 .hb-pill-unknown {
 	color: #888;
@@ -35,35 +38,98 @@
 .hb-temps {
 	display: flex;
 	justify-content: space-between;
-	gap: 18px;
-	margin-bottom: 10px;
+	gap: 22px;
+	margin-bottom: 22px;
 }
 .hb-temp {
 	flex: 1;
 	text-align: center;
+	padding: 12px 8px;
+	border: 1px solid #2a2a2a;
+	border-radius: 10px;
+	background: rgba(255, 255, 255, 0.02);
 }
 .hb-temp-label {
-	font-size: 0.7em;
+	font-size: 0.85em;
 	text-transform: uppercase;
-	letter-spacing: 2px;
+	letter-spacing: 2.5px;
 	color: #888;
+	margin-bottom: 4px;
 }
 .hb-temp-value {
-	font-size: 1.6em;
+	font-size: 2.2em;
 	font-weight: 300;
 	margin: 2px 0;
+	color: #f0f0f0;
 }
 .hb-temp-age {
-	font-size: 0.7em;
+	font-size: 0.8em;
+}
+
+.hb-ctrl-row {
+	display: flex;
+	gap: 14px;
+	margin: 6px 0 12px;
+}
+.hb-btn {
+	flex: 1;
+	padding: 14px 0;
+	font-family: inherit;
+	font-size: 1.25em;
+	letter-spacing: 3px;
+	text-transform: uppercase;
+	border-radius: 10px;
+	background: transparent;
+	color: #ddd;
+	border: 1px solid #555;
+	cursor: pointer;
+	transition: background 120ms ease, border-color 120ms ease, color 120ms ease, opacity 120ms ease;
+}
+.hb-btn:hover {
+	background: rgba(255, 255, 255, 0.06);
+}
+.hb-btn-dull {
+	opacity: 0.55;
+}
+.hb-btn-active {
+	opacity: 1;
+	font-weight: 400;
+}
+.hb-btn-on.hb-btn-active {
+	color: #ffb26b;
+	border-color: #b86a30;
+	background: rgba(184, 106, 48, 0.18);
+}
+.hb-btn-off.hb-btn-active {
+	color: #7cc0ff;
+	border-color: #3a6a95;
+	background: rgba(58, 106, 149, 0.18);
+}
+.hb-btn-auto.hb-btn-active {
+	color: #b8e0a8;
+	border-color: #4e7a3d;
+	background: rgba(78, 122, 61, 0.18);
+}
+.hb-btn-pending {
+	opacity: 0.5;
+	cursor: progress;
+}
+
+.hb-ctrl-meta {
+	margin-top: -2px;
+	margin-bottom: 10px;
+	letter-spacing: 1.5px;
+	text-transform: uppercase;
 }
 
 .hb-reason {
 	font-style: italic;
 	color: #999;
-	font-size: 0.8em;
+	font-size: 0.9em;
+	margin-top: 4px;
 }
 
 .hb-error {
 	color: #e07070;
-	margin-top: 6px;
+	margin-top: 8px;
 }

@@ -93,6 +93,10 @@ def make_app(
         cookie_val = request.cookies.get(COOKIE_NAME, "")
         return verify_cookie_value(cookie_val)
 
+    def _is_localhost() -> bool:
+        remote = (request.remote_addr or "").split("%")[0]
+        return remote in ("127.0.0.1", "::1", "localhost")
+
     def auth_required(f):
         from functools import wraps
 
@@ -223,8 +227,9 @@ def make_app(
         return jsonify(state.snapshot())
 
     @app.get("/api/status")
-    @auth_required
     def api_status():
+        if not (_is_localhost() or _check_pin_cookie()):
+            return jsonify({"error": "unauthorized"}), 401
         return jsonify(state.snapshot())
 
     @app.get("/api/schedule")
@@ -253,8 +258,9 @@ def make_app(
         return jsonify({"ok": True, "count": len(_schedule)})
 
     @app.post("/api/override")
-    @auth_required
     def api_override():
+        if not (_is_localhost() or _check_pin_cookie()):
+            return jsonify({"error": "unauthorized"}), 401
         body = request.get_json(force=True, silent=True) or {}
         mode = body.get("mode", "")
         if mode == "auto":
