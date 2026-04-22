@@ -202,7 +202,7 @@ const Status = (() => {
     const state = (data.commanded_state || "unknown").toLowerCase();
     const headingEl = document.getElementById("st-status-label");
     const badgeEl = document.getElementById("st-heating");
-    if (headingEl) headingEl.textContent = "STATUS — " + state.toUpperCase();
+    if (headingEl) headingEl.textContent = "STATUS";
     if (badgeEl) {
       badgeEl.textContent = state.toUpperCase();
       badgeEl.className = "value badge " + (state === "on" ? "on" : state === "off" ? "off" : "unknown");
