@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import logging
 import os
+import subprocess
 from pathlib import Path
 from typing import Optional
 
@@ -218,6 +219,44 @@ def make_app(
             state.set_override(mode, override_expiry_minutes)
             return jsonify({"ok": True, "mode": mode})
         return jsonify({"error": "mode must be 'on', 'off', or 'auto'"}), 400
+
+    @app.get("/api/version")
+    @auth_required
+    def api_version():
+        repo_dir = Path("/opt/heating-brain")
+        try:
+            short = subprocess.check_output(
+                ["git", "-C", str(repo_dir), "rev-parse", "--short", "HEAD"],
+                stderr=subprocess.DEVNULL, timeout=5,
+            ).decode().strip()
+            full = subprocess.check_output(
+                ["git", "-C", str(repo_dir), "rev-parse", "HEAD"],
+                stderr=subprocess.DEVNULL, timeout=5,
+            ).decode().strip()
+            return jsonify({"commit": full, "short": short})
+        except (subprocess.SubprocessError, FileNotFoundError) as e:
+            return jsonify({"error": f"git unavailable: {e}", "commit": None, "short": None}), 200
+
+    @app.post("/api/update")
+    @auth_required
+    def api_update():
+        # Fire-and-forget: trigger the systemd oneshot update service.
+        # It pulls, chowns, and restarts heating-brain if there are changes.
+        # Requires sudoers entry permitting:
+        #   heating-brain ALL=(root) NOPASSWD: /bin/systemctl start heating-brain-update.service
+        try:
+            proc = subprocess.run(
+                ["sudo", "-n", "/bin/systemctl", "start", "--no-block", "heating-brain-update.service"],
+                capture_output=True, timeout=10,
+            )
+            if proc.returncode != 0:
+                return jsonify({
+                    "error": "failed to trigger update",
+                    "stderr": proc.stderr.decode(errors="replace").strip(),
+                }), 500
+            return jsonify({"triggered": True}), 202
+        except (subprocess.SubprocessError, FileNotFoundError) as e:
+            return jsonify({"error": f"update failed: {e}"}), 500
 
     @app.get("/api/history")
     @auth_required

@@ -229,6 +229,7 @@ html, body {
 
 .feedback.ok  { color: var(--on-green); }
 .feedback.err { color: var(--off-red); }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
 
 /* ------------------------------------------------------------------ */
 /* History chart                                                       */

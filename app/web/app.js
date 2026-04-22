@@ -557,6 +557,89 @@ const WindowModal = (() => {
 })();
 
 // ------------------------------------------------------------------ //
+// System / update                                                     //
+// ------------------------------------------------------------------ //
+
+const Updater = (function() {
+  const versionEl = () => document.getElementById("sys-version");
+  const feedEl = () => document.getElementById("update-feedback");
+  const btn = () => document.getElementById("btn-check-update");
+
+  async function fetchVersion() {
+    try {
+      const resp = await apiFetch("/api/version");
+      if (!resp.ok) return null;
+      const data = await resp.json();
+      return data.short || null;
+    } catch (e) { return null; }
+  }
+
+  function showFeedback(msg, cls) {
+    const el = feedEl();
+    el.textContent = msg;
+    el.className = "feedback " + (cls || "");
+  }
+
+  async function checkForUpdate() {
+    const b = btn();
+    b.disabled = true;
+    const before = await fetchVersion();
+    versionEl().textContent = before || "unknown";
+    showFeedback("Checking for updates...", "");
+
+    let resp;
+    try {
+      resp = await apiFetch("/api/update", { method: "POST" });
+    } catch (e) {
+      showFeedback("Request failed: " + e.message, "err");
+      b.disabled = false;
+      return;
+    }
+    if (!resp.ok) {
+      const body = await resp.json().catch(() => ({}));
+      showFeedback("Trigger failed: " + (body.error || resp.status), "err");
+      b.disabled = false;
+      return;
+    }
+
+    // Poll /api/version every 4s for up to 90s.
+    showFeedback("Update triggered — waiting for restart...", "");
+    const startedAt = Date.now();
+    const poll = async () => {
+      if (Date.now() - startedAt > 90000) {
+        showFeedback("Timed out waiting. Check journalctl -u heating-brain-update.", "err");
+        b.disabled = false;
+        return;
+      }
+      const now = await fetchVersion();
+      if (now && before && now !== before) {
+        versionEl().textContent = now;
+        showFeedback("Updated to " + now + ". Service restarted.", "ok");
+        b.disabled = false;
+        return;
+      }
+      // After 30s with no change, declare up-to-date (the service would
+      // have restarted by now if there was anything to pull).
+      if (Date.now() - startedAt > 30000 && now === before) {
+        showFeedback("Already up to date (" + before + ").", "");
+        b.disabled = false;
+        return;
+      }
+      setTimeout(poll, 4000);
+    };
+    setTimeout(poll, 4000);
+  }
+
+  async function init() {
+    const v = await fetchVersion();
+    versionEl().textContent = v || "unknown";
+    btn().addEventListener("click", checkForUpdate);
+  }
+
+  return { init };
+})();
+
+// ------------------------------------------------------------------ //
 // Logout                                                              //
 // ------------------------------------------------------------------ //
 
@@ -579,6 +662,7 @@ const App = (function() {
     started = true;
     Override.init();
     WindowModal.init();
+    Updater.init();
     initLogout();
     Status.start();
     Chart.load();
