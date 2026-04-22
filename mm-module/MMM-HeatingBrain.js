@@ -29,34 +29,30 @@ Module.register("MMM-HeatingBrain", {
 		this.status = null;
 		this.lastFetchError = null;
 		this.history = [];
-		this.scheduleFetch();
+		this.requestFetch();
+		setInterval(() => this.requestFetch(), this.config.updateIntervalSeconds * 1000);
 	},
 
-	scheduleFetch: function () {
-		this.fetchStatus();
-		setInterval(() => this.fetchStatus(), this.config.updateIntervalSeconds * 1000);
+	requestFetch: function () {
+		// Fetching runs in node_helper to avoid Electron's renderer CSP
+		// blocking cross-port requests to localhost:8423.
+		this.sendSocketNotification("FETCH_STATUS", { brainUrl: this.config.brainUrl });
 	},
 
-	fetchStatus: function () {
-		fetch(this.config.brainUrl + "/status", { cache: "no-store" })
-			.then((r) => {
-				if (!r.ok) throw new Error("HTTP " + r.status);
-				return r.json();
-			})
-			.then((data) => {
-				this.status = data;
-				this.lastFetchError = null;
-				if (data.outdoor_temp_c != null) {
-					this.history.push(data.outdoor_temp_c);
-					if (this.history.length > 30) this.history.shift();
-				}
-				this.updateDom(300);
-			})
-			.catch((err) => {
-				this.lastFetchError = err.message || String(err);
-				Log.error("[MMM-HeatingBrain] fetch failed for " + this.config.brainUrl + "/status: " + this.lastFetchError);
-				this.updateDom(300);
-			});
+	socketNotificationReceived: function (notification, payload) {
+		if (notification === "STATUS_DATA") {
+			this.status = payload;
+			this.lastFetchError = null;
+			if (payload.outdoor_temp_c != null) {
+				this.history.push(payload.outdoor_temp_c);
+				if (this.history.length > 30) this.history.shift();
+			}
+			this.updateDom(300);
+		} else if (notification === "STATUS_ERROR") {
+			this.lastFetchError = payload;
+			Log.error("[MMM-HeatingBrain] fetch failed: " + payload);
+			this.updateDom(300);
+		}
 	},
 
 	formatTemp: function (c) {
