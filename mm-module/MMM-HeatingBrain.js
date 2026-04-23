@@ -36,7 +36,7 @@ Module.register("MMM-HeatingBrain", {
 
 	sendOverride: function (mode) {
 		this.pending = mode;
-		this.updateDom();
+		this.updateDom(0);
 		this.sendSocketNotification("SET_OVERRIDE", {
 			brainUrl: this.config.brainUrl,
 			mode: mode,
@@ -51,18 +51,18 @@ Module.register("MMM-HeatingBrain", {
 				this.history.push(payload.outdoor_temp_c);
 				if (this.history.length > 30) this.history.shift();
 			}
-			this.updateDom(300);
+			this.updateDom(0);
 		} else if (notification === "STATUS_ERROR") {
 			this.lastFetchError = payload;
 			Log.error("[MMM-HeatingBrain] fetch failed: " + payload);
-			this.updateDom(300);
+			this.updateDom(0);
 		} else if (notification === "OVERRIDE_RESULT") {
 			this.pending = null;
 			this.requestFetch();
 		} else if (notification === "OVERRIDE_ERROR") {
 			this.pending = null;
 			this.lastFetchError = "override: " + payload;
-			this.updateDom(200);
+			this.updateDom(0);
 		}
 	},
 
