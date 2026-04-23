@@ -97,6 +97,20 @@ def make_app(
         remote = (request.remote_addr or "").split("%")[0]
         return remote in ("127.0.0.1", "::1", "localhost")
 
+    def _is_lan() -> bool:
+        """Localhost OR RFC1918 private address — treated as trusted for
+        read-only endpoints so other devices on the home LAN (MagicMirror
+        modules, client-mode proxies) can poll /status without a PIN."""
+        remote = (request.remote_addr or "").split("%")[0]
+        if remote in ("127.0.0.1", "::1", "localhost"):
+            return True
+        import ipaddress
+        try:
+            ip = ipaddress.ip_address(remote)
+        except ValueError:
+            return False
+        return ip.is_private or ip.is_loopback or ip.is_link_local
+
     def auth_required(f):
         from functools import wraps
 
@@ -217,10 +231,10 @@ def make_app(
     @app.get("/status")
     def status():
         # Legacy endpoint for MagicMirror² and other local integrations.
-        # Auth-free when called from localhost (same-Pi tile viewers);
-        # requires PIN cookie otherwise so a LAN snoop can't read state.
-        remote = (request.remote_addr or "").split("%")[0]
-        if remote in ("127.0.0.1", "::1", "localhost") or not _pin_ref["value"]:
+        # Read-only, so we allow it from anywhere on the home LAN (including
+        # client-mode Pis proxying on behalf of their own MM² modules).
+        # Non-LAN callers still need a valid PIN cookie.
+        if _is_lan() or not _pin_ref["value"]:
             return jsonify(state.snapshot())
         if not _check_pin_cookie():
             return jsonify({"error": "unauthorized"}), 401
@@ -228,7 +242,7 @@ def make_app(
 
     @app.get("/api/status")
     def api_status():
-        if not (_is_localhost() or _check_pin_cookie()):
+        if not (_is_lan() or _check_pin_cookie()):
             return jsonify({"error": "unauthorized"}), 401
         return jsonify(state.snapshot())
 
