@@ -15,6 +15,7 @@ Config requirements:
 from __future__ import annotations
 
 import logging
+import subprocess
 from pathlib import Path
 from typing import Any
 
@@ -109,7 +110,60 @@ def make_client_app(primary_url: str) -> Flask:
             content_type=upstream.headers.get("Content-Type"),
         )
 
-    # ----- Proxy every API path straight through to the primary -----
+    # ----- Local endpoints that must NOT be proxied -----
+    # /api/version and /api/update report and act on THIS Pi's git clone,
+    # not the primary's. Each Pi has its own /opt/heating-brain, so updates
+    # need to be initiated locally. Registered before the catch-all below so
+    # Flask's router picks the more specific route first.
+
+    @app.get("/api/version")
+    def local_version() -> Response:
+        repo_dir = Path("/opt/heating-brain")
+        try:
+            short = subprocess.check_output(
+                ["git", "-C", str(repo_dir), "rev-parse", "--short", "HEAD"],
+                stderr=subprocess.DEVNULL, timeout=5,
+            ).decode().strip()
+            full = subprocess.check_output(
+                ["git", "-C", str(repo_dir), "rev-parse", "HEAD"],
+                stderr=subprocess.DEVNULL, timeout=5,
+            ).decode().strip()
+            return jsonify({"commit": full, "short": short})
+        except (subprocess.SubprocessError, FileNotFoundError) as e:
+            return jsonify({"error": f"git unavailable: {e}", "commit": None, "short": None})
+
+    @app.post("/api/update")
+    def local_update() -> Response:
+        repo_dir = "/opt/heating-brain"
+        git_base = ["git", "-C", repo_dir, "-c", f"safe.directory={repo_dir}"]
+        try:
+            subprocess.run(
+                git_base + ["fetch", "--quiet", "origin", "main"],
+                capture_output=True, timeout=30,
+            )
+            local = subprocess.check_output(
+                git_base + ["rev-parse", "HEAD"], timeout=5,
+            ).decode().strip()
+            remote = subprocess.check_output(
+                git_base + ["rev-parse", "origin/main"], timeout=5,
+            ).decode().strip()
+        except (subprocess.SubprocessError, FileNotFoundError) as e:
+            return jsonify({"error": f"git failed: {e}"}), 500
+
+        if local == remote:
+            return jsonify({"updated": False, "version": local[:7]})
+
+        try:
+            subprocess.Popen(
+                ["sudo", "-n", "/usr/bin/systemctl", "start", "heating-brain-update.service"],
+                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+        except (OSError, FileNotFoundError) as e:
+            return jsonify({"error": f"trigger failed: {e}"}), 500
+        return jsonify({"updated": True, "before": local[:7], "after": remote[:7]}), 202
+
+    # ----- Proxy every other API path straight through to the primary -----
     @app.route("/api/<path:subpath>", methods=["GET", "POST", "PUT", "DELETE"])
     def proxy_api(subpath: str) -> Response:
         return _proxy(f"/api/{subpath}")
