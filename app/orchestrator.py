@@ -74,8 +74,16 @@ class Orchestrator:
                 "Remove it from config.yaml — heating now uses per-window thresholds."
             )
         sensor_cfg = self.config.get("sensor", {}) or {}
-        self.sensor_enabled = bool(sensor_cfg.get("enabled", False))
+        # Back-compat: old `sensor.enabled` key meant "use indoor ESP32".
+        # New config uses explicit indoor_enabled / outdoor_enabled.
+        legacy_enabled = sensor_cfg.get("enabled")
+        self.indoor_sensor_enabled = bool(
+            sensor_cfg.get("indoor_enabled", legacy_enabled if legacy_enabled is not None else False)
+        )
+        self.outdoor_sensor_enabled = bool(sensor_cfg.get("outdoor_enabled", False))
         self.sensor_max_age = int(sensor_cfg.get("max_age_seconds", 600))
+        self.indoor_aggregate = sensor_cfg.get("indoor_aggregate", "mean")
+        self.outdoor_aggregate = sensor_cfg.get("outdoor_aggregate", "mean")
         if "indoor_threshold_celsius" in sensor_cfg:
             log.warning(
                 "sensor.indoor_threshold_celsius is deprecated and no longer used. "
@@ -151,12 +159,9 @@ class Orchestrator:
         if time.time() - self._weather_last_fetch < self.weather_interval:
             return
         try:
-            r = self.weather.fetch()
+            self.weather.fetch()
             self._weather_last_fetch = time.time()
-            self.state.update(
-                outdoor_temp_c=r.temperature_celsius,
-                outdoor_fetched_at=r.fetched_at,
-            )
+            # _outdoor_temp() reads weather.cached() and writes the snapshot.
         except Exception as e:
             log.warning("Weather fetch failed: %s", e)
             self.state.update(last_error=f"weather: {e}", last_error_at=time.time())
@@ -174,15 +179,23 @@ class Orchestrator:
 
     def _indoor_from_zone_state(self, zone_state: Optional[dict]) -> Optional[float]:
         """
-        Pick the best indoor temperature: fresh ESP32 reading if available
-        and recent, otherwise extract Tado's built-in insideTemperature from
-        the zone state we already fetched.
+        Pick the best indoor temperature:
+        - If indoor ESP32 sensors are enabled and any fresh readings exist,
+          aggregate them (mean/min/max) and use that.
+        - Otherwise fall back to Tado's built-in insideTemperature from the
+          zone state we already fetched.
         """
-        if self.sensor_enabled:
-            temp, fetched_at = self.state.indoor_reading()
-            if temp is not None and fetched_at is not None:
-                if (time.time() - fetched_at) <= self.sensor_max_age:
-                    return temp
+        if self.indoor_sensor_enabled:
+            temp, fetched_at = self.state.aggregate_reading(
+                "indoor", self.sensor_max_age, self.indoor_aggregate,
+            )
+            if temp is not None:
+                self.state.update(
+                    indoor_temp_c=temp,
+                    indoor_fetched_at=fetched_at,
+                    indoor_source="sensor",
+                )
+                return temp
 
         if zone_state is None:
             return None
@@ -193,8 +206,42 @@ class Orchestrator:
         if celsius is None:
             return None
         t = float(celsius)
-        self.state.update(indoor_temp_c=t, indoor_fetched_at=time.time())
+        self.state.update(
+            indoor_temp_c=t,
+            indoor_fetched_at=time.time(),
+            indoor_source="tado",
+        )
         return t
+
+    def _outdoor_temp(self) -> Optional[float]:
+        """
+        Pick the best outdoor temperature:
+        - If outdoor ESP32 sensors are enabled and any fresh readings exist,
+          aggregate them and use that.
+        - Otherwise fall back to the Open-Meteo cached reading.
+        Either way, records the chosen value + source in SharedState.
+        """
+        if self.outdoor_sensor_enabled:
+            temp, fetched_at = self.state.aggregate_reading(
+                "outdoor", self.sensor_max_age, self.outdoor_aggregate,
+            )
+            if temp is not None:
+                self.state.update(
+                    outdoor_temp_c=temp,
+                    outdoor_fetched_at=fetched_at,
+                    outdoor_source="sensor",
+                )
+                return temp
+
+        cached = self.weather.cached()
+        if cached is None:
+            return None
+        self.state.update(
+            outdoor_temp_c=cached.temperature_celsius,
+            outdoor_fetched_at=cached.fetched_at,
+            outdoor_source="weather",
+        )
+        return cached.temperature_celsius
 
     def _power_from_zone_state(self, zone_state: Optional[dict]) -> HeatingState:
         """Extract the current power state Tado actually has set."""
@@ -297,16 +344,14 @@ class Orchestrator:
     # ------------------------------------------------------------------
     def _tick(self) -> None:
         self._fetch_weather_if_due()
-        outdoor = self.weather.cached()
 
         # One zone-state fetch per tick — supplies indoor temp AND the actual
         # Tado power state (for Alexa / external-change detection).
         zone_state = self._fetch_zone_state()
         indoor = self._indoor_from_zone_state(zone_state)
+        outdoor_temp = self._outdoor_temp()
         actual_power = self._power_from_zone_state(zone_state)
         self._reconcile_external_change(actual_power)
-
-        outdoor_temp = outdoor.temperature_celsius if outdoor else None
 
         # Auto-clear manual override when a new schedule window just started.
         # Rationale: user pressed On/Off manually — that hold lasts until the

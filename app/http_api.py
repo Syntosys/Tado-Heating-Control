@@ -143,9 +143,15 @@ def make_app(
             return jsonify({"error": f"bad request: {e}"}), 400
         if not (-40 <= temp <= 80):
             return jsonify({"error": "temperature out of plausible range"}), 400
-        state.record_indoor(temp)
-        log.debug("Sensor reading: %.2f°C", temp)
-        return jsonify({"ok": True})
+        # Optional fields. Older ESP32 sketches that only POST
+        # {"temperature_celsius": N} are treated as a single indoor sensor.
+        location = str(body.get("location", "indoor")).strip().lower()
+        if location not in ("indoor", "outdoor"):
+            return jsonify({"error": "location must be 'indoor' or 'outdoor'"}), 400
+        sensor_id = str(body.get("sensor_id", "default")).strip() or "default"
+        state.record_sensor(sensor_id, temp, location)
+        log.debug("Sensor reading %s@%s: %.2f°C", sensor_id, location, temp)
+        return jsonify({"ok": True, "sensor_id": sensor_id, "location": location})
 
     # ------------------------------------------------------------------
     # Auth endpoints

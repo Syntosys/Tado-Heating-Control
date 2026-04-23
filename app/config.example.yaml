@@ -140,16 +140,34 @@ http:
   override_expiry_minutes: 120
 
 # -------------------------------------------------------------------
-# Indoor sensor (optional — ESP32 posting to /sensor)
+# External sensors (optional — ESP32s posting to /sensor)
 # -------------------------------------------------------------------
-# If enabled: a fresh ESP32 reading takes priority over Tado's built-in
-# indoor sensor for decision-making. If disabled (or no fresh reading),
-# Tado's own insideTemperature reading is used automatically.
+# Any number of ESP32s can POST readings. Each reading names its own
+# sensor_id and location ("indoor" or "outdoor"). Multiple readings at
+# the same location are combined per the aggregate setting below.
+#
+# /sensor body (all fields optional except temperature_celsius):
+#   {
+#     "temperature_celsius": 20.3,
+#     "location": "indoor",      // or "outdoor" — default "indoor"
+#     "sensor_id": "bedroom"     // any string; default "default"
+#   }
+#
+# When enabled for a given location, fresh ESP32 readings take priority
+# over the fallback source (Tado's built-in indoor sensor, or Open-Meteo
+# for outdoor). If no fresh reading exists, the fallback is used — so a
+# flat battery never blinds the controller.
 sensor:
-  enabled: false
+  # Use ESP32 indoor readings (else fall back to Tado's zone temperature).
+  indoor_enabled: false
+  # Use ESP32 outdoor readings (else fall back to Open-Meteo weather API).
+  outdoor_enabled: false
   # Reject sensor readings older than this many seconds.
   max_age_seconds: 600
-  # Optional shared secret. If set, ESP32 must send X-Sensor-Token header.
+  # How to combine multiple readings at the same location: mean | min | max.
+  indoor_aggregate: mean
+  outdoor_aggregate: mean
+  # Optional shared secret. If set, ESP32s must send X-Sensor-Token header.
   # token: "change-me"
 
 # -------------------------------------------------------------------
