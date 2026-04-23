@@ -2,6 +2,21 @@
 # Copy this to /etc/heating-brain/config.yaml and edit for your setup.
 
 # -------------------------------------------------------------------
+# Deployment mode
+# -------------------------------------------------------------------
+# "primary" (default): this device runs the full control loop — polls
+#   weather, makes decisions, and sends commands to Tado. Exactly ONE
+#   device on your network should run in primary mode.
+# "client": this device runs no control loop and talks to no external
+#   APIs. It only hosts the web UI, and every API call is proxied to
+#   the primary Pi over the LAN. Set `primary_url` below.
+mode: primary
+
+# Only used when mode == "client". URL of the primary Pi's HTTP API.
+# Example: "http://192.168.1.42:8423"
+primary_url: ""
+
+# -------------------------------------------------------------------
 # Location (for Open-Meteo outdoor temperature)
 # -------------------------------------------------------------------
 location:
@@ -51,6 +66,17 @@ control:
   on_overlay_termination: "MANUAL"
   # Only used when on_overlay_termination == TIMER
   timer_minutes: 120
+
+  # Detect external changes to the Tado state (e.g. from Alexa, the
+  # Tado app, or a family member's phone). When enabled, each tick
+  # compares Tado's actual power state to what we last commanded.
+  # A mismatch is treated as a manual override, so the external change
+  # sticks until the next schedule-window transition — same as if you'd
+  # pressed On/Off in the web UI.
+  detect_external_changes: true
+  # Ignore mismatches within this many seconds of our own last command,
+  # to avoid racing against Tado's own state-propagation delay.
+  external_change_cooldown_seconds: 120
 
 # -------------------------------------------------------------------
 # Schedule — when the controller is ALLOWED to act on temperatures.

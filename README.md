@@ -48,6 +48,8 @@ Tado made significant changes in 2025 that affect anyone integrating with their 
 - Optional indoor sensor input via HTTP (ESP32-ready)
 - HTTP API for dashboards and integrations
 - **Mobile web UI** — PIN-protected multi-page SPA served at port 8423; four tabs: Now (live status + On/Off/Auto controls), History (24 h and 7-day temperature/heating charts), Schedule (add/edit/delete windows), Settings (version/update + PIN change)
+- **Multi-device support** — run one Pi in `mode: primary` and any number of other devices in `mode: client`; the clients host the same web UI but proxy every request to the primary, so the Tado API is only ever polled once
+- **External-change detection** — if Alexa, the Tado app, or anyone else flips the heating, the brain notices next tick, adopts the new state, and treats it as a manual override until the next schedule-window transition (no extra API calls — it piggybacks on the zone-state fetch already used for indoor temperature)
 - MagicMirror² module included
 - Systemd hardening (runs as unprivileged user, read-only filesystem)
 

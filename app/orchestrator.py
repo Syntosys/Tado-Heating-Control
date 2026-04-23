@@ -85,6 +85,9 @@ class Orchestrator:
         http_cfg = self.config.get("http", {}) or {}
         self.override_expiry_minutes = int(http_cfg.get("override_expiry_minutes", 120))
 
+        self.detect_external_changes = bool(ctrl.get("detect_external_changes", True))
+        self.external_change_cooldown = int(ctrl.get("external_change_cooldown_seconds", 120))
+
         self._home_id: Optional[int] = None
         self._zone_id: Optional[int] = self.config["tado"].get("zone_id")
         self._commanded_state: HeatingState = HeatingState.UNKNOWN
@@ -158,31 +161,88 @@ class Orchestrator:
             log.warning("Weather fetch failed: %s", e)
             self.state.update(last_error=f"weather: {e}", last_error_at=time.time())
 
-    def _get_indoor_temp(self) -> Optional[float]:
+    def _fetch_zone_state(self) -> Optional[dict]:
+        """Fetch the Tado zone state once per tick. Returns None on failure."""
+        if self._home_id is None or self._zone_id is None:
+            return None
+        try:
+            return self.tado.get_zone_state(self._home_id, self._zone_id)
+        except Exception as e:
+            log.warning("Failed to read Tado zone state: %s", e)
+            self.state.update(last_error=f"tado: {e}", last_error_at=time.time())
+            return None
+
+    def _indoor_from_zone_state(self, zone_state: Optional[dict]) -> Optional[float]:
         """
-        Return the best available indoor temperature reading.
-        Prefer a fresh ESP32 reading (posted to /sensor), fall back to Tado's
-        zone state reading.
+        Pick the best indoor temperature: fresh ESP32 reading if available
+        and recent, otherwise extract Tado's built-in insideTemperature from
+        the zone state we already fetched.
         """
-        # Prefer fresh ESP32 reading if the sensor is enabled and reading is recent.
         if self.sensor_enabled:
             temp, fetched_at = self.state.indoor_reading()
             if temp is not None and fetched_at is not None:
                 if (time.time() - fetched_at) <= self.sensor_max_age:
                     return temp
 
-        # Fall back to Tado's own indoor sensor reading.
-        if self._home_id is not None and self._zone_id is not None:
-            tado_indoor = self.tado.get_indoor_temperature(self._home_id, self._zone_id)
-            if tado_indoor is not None:
-                # Store it in shared state so the UI can show it.
-                self.state.update(
-                    indoor_temp_c=tado_indoor,
-                    indoor_fetched_at=time.time(),
-                )
-                return tado_indoor
+        if zone_state is None:
+            return None
+        try:
+            celsius = zone_state.get("sensorDataPoints", {}).get("insideTemperature", {}).get("celsius")
+        except AttributeError:
+            celsius = None
+        if celsius is None:
+            return None
+        t = float(celsius)
+        self.state.update(indoor_temp_c=t, indoor_fetched_at=time.time())
+        return t
 
-        return None
+    def _power_from_zone_state(self, zone_state: Optional[dict]) -> HeatingState:
+        """Extract the current power state Tado actually has set."""
+        if zone_state is None:
+            return HeatingState.UNKNOWN
+        power = zone_state.get("setting", {}).get("power")
+        if power == "ON":
+            return HeatingState.ON
+        if power == "OFF":
+            return HeatingState.OFF
+        return HeatingState.UNKNOWN
+
+    def _reconcile_external_change(self, actual: HeatingState) -> None:
+        """
+        Detect changes to Tado made outside the heating brain (Alexa, the Tado
+        app, a family member's phone, etc.). When spotted, adopt the new state
+        and raise a manual override so the external action sticks until the
+        next schedule-window transition.
+        """
+        if not self.detect_external_changes:
+            return
+        if actual == HeatingState.UNKNOWN:
+            return
+        if actual == self._commanded_state:
+            return
+        # Ignore the window right after we sent a command — Tado's own state
+        # propagation can briefly disagree with what we just pushed.
+        if (
+            self._last_state_change_at > 0
+            and (time.time() - self._last_state_change_at) < self.external_change_cooldown
+        ):
+            return
+
+        mode = "on" if actual == HeatingState.ON else "off"
+        log.info(
+            "External Tado change detected: was %s, now %s — adopting as manual override.",
+            self._commanded_state.value, actual.value,
+        )
+        self._commanded_state = actual
+        self._last_state_change_at = time.time()
+        # Use override_expiry_minutes so the change auto-clears alongside UI overrides.
+        # The schedule-window-transition guard in _tick will also clear it at the next window.
+        self.state.set_override(mode, self.override_expiry_minutes)
+        self.state.update(
+            commanded_state=self._commanded_state.value,
+            last_state_change_at=self._last_state_change_at,
+            last_reason=f"external change detected ({mode})",
+        )
 
     def _apply_decision(self, decision: Decision) -> None:
         self.state.update(
@@ -238,7 +298,13 @@ class Orchestrator:
     def _tick(self) -> None:
         self._fetch_weather_if_due()
         outdoor = self.weather.cached()
-        indoor = self._get_indoor_temp()
+
+        # One zone-state fetch per tick — supplies indoor temp AND the actual
+        # Tado power state (for Alexa / external-change detection).
+        zone_state = self._fetch_zone_state()
+        indoor = self._indoor_from_zone_state(zone_state)
+        actual_power = self._power_from_zone_state(zone_state)
+        self._reconcile_external_change(actual_power)
 
         outdoor_temp = outdoor.temperature_celsius if outdoor else None
 
@@ -361,6 +427,19 @@ def main() -> None:
         help="Path to config.yaml",
     )
     args = parser.parse_args()
+
+    # Peek at the mode before constructing the full Orchestrator — client mode
+    # skips Tado auth, weather polling, and the control loop entirely.
+    with open(args.config, "r") as f:
+        cfg = yaml.safe_load(f)
+    mode = (cfg.get("mode") or "primary").strip().lower()
+    if mode == "client":
+        from .client_mode import run_client
+        run_client(cfg)
+        return
+    if mode != "primary":
+        raise SystemExit(f"config.mode must be 'primary' or 'client', got {mode!r}")
+
     Orchestrator(args.config).run()
 
 
