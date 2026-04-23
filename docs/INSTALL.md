@@ -36,6 +36,8 @@ sudo mkdir -p /etc/heating-brain /var/lib/heating-brain /var/log/heating-brain
 sudo chown -R heating-brain:heating-brain /opt/heating-brain /var/lib/heating-brain /var/log/heating-brain
 ```
 
+> **Important:** the `chown -R /opt/heating-brain` line is what lets the service later update itself via `git pull`. If you skip it, or if you later run `git pull` as a different user, the Update button will silently fail. See the troubleshooting section if this happens.
+
 ### 4. Python virtual environment
 
 ```bash
@@ -308,6 +310,18 @@ The most common cause is the primary binding to `127.0.0.1` only, or an old prim
 
 ### YAML parse errors ("mapping values are not allowed here")
 Indentation. Every top-level key must be flush-left. Run `sudo cat -A /etc/heating-brain/config.yaml` — trailing `$` is just the line ending, but any leading spaces shown on top-level keys are the bug.
+
+### Update button says "already up to date" but it isn't
+
+Happens when `/opt/heating-brain/.git/objects` contains files owned by a user other than `heating-brain` (usually because an earlier `git pull` ran as `root` or the login user). The fetch fails with `insufficient permission for adding an object to repository database` — but the API handler hides stderr, so you only see the stale "up to date" result. Fix:
+
+```bash
+sudo chown -R heating-brain:heating-brain /opt/heating-brain
+sudo -u heating-brain git -c safe.directory=/opt/heating-brain pull origin main
+sudo systemctl restart heating-brain
+```
+
+From then on, always run manual pulls as the service user (`sudo -u heating-brain git …`) or use the Update button.
 
 ### General log dump
 ```bash

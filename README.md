@@ -287,12 +287,14 @@ The web UI has a **Settings → Update** button that runs `git pull` and restart
 
 ```bash
 cd /opt/heating-brain
-sudo -u heating-brain git pull
+sudo -u heating-brain git -c safe.directory=/opt/heating-brain pull origin main
 sudo systemctl restart heating-brain
 sudo journalctl -u heating-brain -f
 ```
 
-On a client-mode Pi the same commands apply — the proxy is part of this repo too.
+On a client-mode Pi the same commands apply — the proxy is part of this repo too. Each device updates its own `/opt/heating-brain` independently; the web UI's Update button is wired to the local git repo, not proxied to the primary.
+
+> **Always update as `heating-brain`.** If you ever run `git pull` as a different user (or as `root`), newly-fetched git objects end up with ownership the service user can't write, and subsequent updates will silently fail. If that's already happened — symptom is the Update button saying "already up to date" when it clearly isn't — run `sudo chown -R heating-brain:heating-brain /opt/heating-brain` to restore ownership, then pull again.
 
 ## Troubleshooting
 
@@ -324,6 +326,17 @@ Same check as above — the client's proxy couldn't reach the primary. Most comm
 
 ### YAML parse errors
 `sudo cat -A /etc/heating-brain/config.yaml` to check for stray indentation or smart-quotes. Every top-level key must be flush to the left margin, with nested keys indented by 2 spaces.
+
+### Update button says "already up to date" but it isn't
+Ownership issue in `/opt/heating-brain/.git`. This happens when someone has previously run `git pull` (or `git clone`) as a user other than `heating-brain`, so new git objects end up with an ownership the service user can't write. The fetch in the update handler silently fails and the stale `origin/main` ref matches the stale local `HEAD`.
+
+```bash
+sudo chown -R heating-brain:heating-brain /opt/heating-brain
+sudo -u heating-brain git -c safe.directory=/opt/heating-brain pull origin main
+sudo systemctl restart heating-brain
+```
+
+From then on, always use `sudo -u heating-brain git …` when pulling manually, or just click the Update button.
 
 ### Logs in general
 ```bash
