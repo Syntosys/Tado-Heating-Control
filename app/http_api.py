@@ -322,10 +322,17 @@ def make_app(
         repo_dir = "/opt/heating-brain"
         git_base = ["git", "-C", repo_dir, "-c", f"safe.directory={repo_dir}"]
         try:
-            subprocess.run(
-                git_base + ["fetch", "--quiet", "origin", "main"],
+            fetch = subprocess.run(
+                git_base + ["fetch", "origin", "main"],
                 capture_output=True, timeout=30,
             )
+            if fetch.returncode != 0:
+                stderr = (fetch.stderr or b"").decode(errors="replace").strip()
+                log.warning("git fetch failed (rc=%d): %s", fetch.returncode, stderr)
+                return jsonify({
+                    "error": f"git fetch failed: {stderr or 'exit code ' + str(fetch.returncode)}",
+                    "hint": "check that /opt/heating-brain is owned by heating-brain:heating-brain",
+                }), 500
             local = subprocess.check_output(
                 git_base + ["rev-parse", "HEAD"],
                 timeout=5,
