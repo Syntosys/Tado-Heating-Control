@@ -24,7 +24,10 @@ PrivateTmp=true
 # git fetch (writes FETCH_HEAD and objects). Without this, fetch fails
 # with "Read-only file system" and the Update button silently returns
 # up-to-date.
-ReadWritePaths=/var/lib/heating-brain /var/log/heating-brain /opt/heating-brain
+# /etc/heating-brain must be writable so the /api/schedule and /api/pin
+# endpoints can rewrite config.yaml. Without this, saving a schedule
+# window from the web UI fails with "Read-only file system".
+ReadWritePaths=/var/lib/heating-brain /var/log/heating-brain /opt/heating-brain /etc/heating-brain
 
 # Standard streams -> journal
 StandardOutput=journal
