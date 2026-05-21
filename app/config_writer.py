@@ -34,12 +34,36 @@ from typing import Optional
 
 import yaml
 
+from .config_validator import validate
 from .schedule import Window
 
 log = logging.getLogger(__name__)
 
 LOCK_FILE = Path("/var/lib/heating-brain/config.lock")
 LOCK_TIMEOUT = 10  # seconds
+
+
+class ConfigWriteError(OSError):
+    """Raised when a write would produce an invalid config; the on-disk file is untouched."""
+
+
+def _validate_new_content(new_content: str, context: str) -> None:
+    """Parse and schema-check the candidate file body. Raise ConfigWriteError on any issue.
+
+    Why: prevents the writer from leaving a broken config that crash-loops the
+    service. See the May 2026 incident — a duplicate schedule list got appended
+    without a parent key and the service restarted 4198 times before the file
+    was hand-fixed.
+    """
+    try:
+        cfg = yaml.safe_load(new_content)
+    except yaml.YAMLError as e:
+        raise ConfigWriteError(f"{context}: refusing to write — YAML parse error: {e}") from e
+    errors = validate(cfg)
+    if errors:
+        details = "; ".join(errors[:5])
+        more = f" (+{len(errors) - 5} more)" if len(errors) > 5 else ""
+        raise ConfigWriteError(f"{context}: refusing to write — invalid config: {details}{more}")
 
 
 def _serialise_window(w: Window) -> dict:
@@ -120,6 +144,8 @@ def write_schedule(config_path: Path, windows: list[Window]) -> None:
 
         new_schedule_yaml = _windows_to_yaml(windows)
         new_content = body + new_schedule_yaml
+
+        _validate_new_content(new_content, f"write_schedule({config_path})")
 
         tmp = config_path.with_suffix(".tmp")
         tmp.write_text(new_content, encoding="utf-8")
@@ -222,6 +248,9 @@ def patch_config(config_path: Path, section: str, key: str, value: str) -> None:
             new_lines.append(f"{section_indent}{key}: '{value}'\n")
 
         new_content = "".join(new_lines)
+
+        _validate_new_content(new_content, f"patch_config({section}.{key})")
+
         tmp = config_path.with_suffix(".tmp")
         tmp.write_text(new_content, encoding="utf-8")
         tmp.replace(config_path)

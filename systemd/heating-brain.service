@@ -2,12 +2,21 @@
 Description=Heating Brain (Tado controller)
 After=network-online.target
 Wants=network-online.target
+# Stop hammering systemd if config is broken or service is otherwise wedged.
+# After 5 failed starts within 5 minutes the unit enters 'failed' instead of
+# restarting forever (the May 2026 incident logged 4198 restarts before a
+# human noticed).
+StartLimitIntervalSec=300
+StartLimitBurst=5
 
 [Service]
 Type=simple
 User=heating-brain
 Group=heating-brain
 WorkingDirectory=/opt/heating-brain
+# Validate the config before launching. A non-zero exit fails the unit with a
+# clear journal entry instead of letting orchestrator.py traceback on bad YAML.
+ExecStartPre=/opt/heating-brain/venv/bin/python -m app.config_validator /etc/heating-brain/config.yaml
 ExecStart=/opt/heating-brain/venv/bin/python -m app.orchestrator --config /etc/heating-brain/config.yaml
 Restart=on-failure
 RestartSec=10
