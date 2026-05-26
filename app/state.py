@@ -19,6 +19,8 @@ class SensorReading:
     location: str          # "indoor" or "outdoor"
     temperature_c: float
     fetched_at: float
+    humidity_pct: Optional[float] = None
+    pressure_hpa: Optional[float] = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -27,6 +29,8 @@ class SensorReading:
             "temperature_c": self.temperature_c,
             "fetched_at": self.fetched_at,
             "age_seconds": max(0.0, time.time() - self.fetched_at),
+            "humidity_pct": self.humidity_pct,
+            "pressure_hpa": self.pressure_hpa,
         }
 
 
@@ -36,6 +40,8 @@ class Snapshot:
     outdoor_temp_c: Optional[float] = None
     outdoor_fetched_at: Optional[float] = None
     outdoor_source: Optional[str] = None         # "sensor" | "weather" | None
+    outdoor_humidity_pct: Optional[float] = None
+    outdoor_pressure_hpa: Optional[float] = None
     indoor_temp_c: Optional[float] = None
     indoor_fetched_at: Optional[float] = None
     indoor_source: Optional[str] = None          # "sensor" | "tado" | None
@@ -85,7 +91,15 @@ class SharedState:
     # ------------------------------------------------------------------
     # Sensor readings
     # ------------------------------------------------------------------
-    def record_sensor(self, sensor_id: str, temperature_c: float, location: str) -> None:
+    def record_sensor(
+        self,
+        sensor_id: str,
+        temperature_c: float,
+        location: str,
+        *,
+        humidity_pct: Optional[float] = None,
+        pressure_hpa: Optional[float] = None,
+    ) -> None:
         """Record a reading from a named sensor at a given location."""
         if location not in _VALID_LOCATIONS:
             raise ValueError(f"location must be one of {_VALID_LOCATIONS}")
@@ -96,6 +110,8 @@ class SharedState:
                 location=location,
                 temperature_c=float(temperature_c),
                 fetched_at=time.time(),
+                humidity_pct=humidity_pct,
+                pressure_hpa=pressure_hpa,
             )
 
     def record_indoor(self, temp_c: float) -> None:
@@ -136,6 +152,18 @@ class SharedState:
             raise ValueError(f"aggregate mode must be one of {_VALID_AGGREGATES}")
         most_recent = max(r.fetched_at for r in readings)
         return temp, most_recent
+
+    def outdoor_extras(self, max_age_seconds: float) -> tuple[Optional[float], Optional[float]]:
+        """
+        Return (humidity_pct, pressure_hpa) from the freshest outdoor sensor
+        reading that is within max_age_seconds. Returns (None, None) if no
+        fresh outdoor reading exists or if the freshest reading has no data.
+        """
+        readings = self.fresh_sensors("outdoor", max_age_seconds)
+        if not readings:
+            return None, None
+        latest = max(readings, key=lambda r: r.fetched_at)
+        return latest.humidity_pct, latest.pressure_hpa
 
     def indoor_reading(self) -> tuple[Optional[float], Optional[float]]:
         """Back-compat: returns the most recent raw indoor reading (any id)."""

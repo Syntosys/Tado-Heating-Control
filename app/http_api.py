@@ -149,8 +149,29 @@ def make_app(
         if location not in ("indoor", "outdoor"):
             return jsonify({"error": "location must be 'indoor' or 'outdoor'"}), 400
         sensor_id = str(body.get("sensor_id", "default")).strip() or "default"
-        state.record_sensor(sensor_id, temp, location)
-        log.debug("Sensor reading %s@%s: %.2f°C", sensor_id, location, temp)
+
+        # Optional humidity and pressure — absent fields default to None.
+        humidity_pct: Optional[float] = None
+        pressure_hpa: Optional[float] = None
+        if "humidity_pct" in body and body["humidity_pct"] is not None:
+            try:
+                humidity_pct = float(body["humidity_pct"])
+            except (TypeError, ValueError) as e:
+                return jsonify({"error": f"bad humidity_pct: {e}"}), 400
+            if not (0.0 <= humidity_pct <= 100.0):
+                return jsonify({"error": "humidity_pct out of range (0–100)"}), 400
+        if "pressure_hpa" in body and body["pressure_hpa"] is not None:
+            try:
+                pressure_hpa = float(body["pressure_hpa"])
+            except (TypeError, ValueError) as e:
+                return jsonify({"error": f"bad pressure_hpa: {e}"}), 400
+            if not (800.0 <= pressure_hpa <= 1100.0):
+                return jsonify({"error": "pressure_hpa out of range (800–1100)"}), 400
+
+        state.record_sensor(sensor_id, temp, location,
+                            humidity_pct=humidity_pct, pressure_hpa=pressure_hpa)
+        log.debug("Sensor reading %s@%s: %.2f°C hum=%s prs=%s",
+                  sensor_id, location, temp, humidity_pct, pressure_hpa)
         return jsonify({"ok": True, "sensor_id": sensor_id, "location": location})
 
     # ------------------------------------------------------------------

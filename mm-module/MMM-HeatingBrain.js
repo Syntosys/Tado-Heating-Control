@@ -71,6 +71,16 @@ Module.register("MMM-HeatingBrain", {
 		return c.toFixed(1) + "°C";
 	},
 
+	formatHumidity: function (pct) {
+		if (pct == null) return "–";
+		return pct.toFixed(1) + " %";
+	},
+
+	formatPressure: function (hpa) {
+		if (hpa == null) return "–";
+		return hpa.toFixed(1) + " hPa";
+	},
+
 	formatAge: function (epochSeconds) {
 		if (!epochSeconds) return "never";
 		const age = Math.max(0, Math.floor(Date.now() / 1000 - epochSeconds));
@@ -176,6 +186,21 @@ Module.register("MMM-HeatingBrain", {
 			this.makeTempTile("Target", this.formatTemp(s.threshold_c), s.active_window_name || "—")
 		);
 		wrap.appendChild(temps);
+
+		// Outdoor humidity and pressure — only shown when a BME280 sensor is live.
+		if (s.outdoor_humidity_pct != null || s.outdoor_pressure_hpa != null) {
+			const extras = document.createElement("div");
+			extras.className = "hb-outdoor-extras";
+			const humLine = document.createElement("span");
+			humLine.className = "hb-extra-item dimmed small";
+			humLine.textContent = "Humidity: " + this.formatHumidity(s.outdoor_humidity_pct);
+			const prsLine = document.createElement("span");
+			prsLine.className = "hb-extra-item dimmed small";
+			prsLine.textContent = "Pressure: " + this.formatPressure(s.outdoor_pressure_hpa);
+			extras.appendChild(humLine);
+			extras.appendChild(prsLine);
+			wrap.appendChild(extras);
+		}
 
 		if (this.config.showControls) {
 			const active = this.activeMode(s);

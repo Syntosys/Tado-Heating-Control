@@ -214,6 +214,20 @@ const Status = (() => {
     if (indoorEl) indoorEl.textContent = fmtTemp(data.indoor_temp_c);
     if (outdoorEl) outdoorEl.textContent = fmtTemp(data.outdoor_temp_c);
 
+    // Outdoor humidity and pressure (from BME280 sensor; null when unavailable)
+    const humidityEl = document.getElementById("st-humidity");
+    const pressureEl = document.getElementById("st-pressure");
+    if (humidityEl) {
+      humidityEl.textContent = data.outdoor_humidity_pct != null
+        ? data.outdoor_humidity_pct.toFixed(1) + " %"
+        : "—";
+    }
+    if (pressureEl) {
+      pressureEl.textContent = data.outdoor_pressure_hpa != null
+        ? data.outdoor_pressure_hpa.toFixed(1) + " hPa"
+        : "—";
+    }
+
     // Last command
     const lastCmdHeader = document.getElementById("lastcmd-header");
     const reasonEl = document.getElementById("st-reason");

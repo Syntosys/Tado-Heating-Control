@@ -226,10 +226,13 @@ class Orchestrator:
                 "outdoor", self.sensor_max_age, self.outdoor_aggregate,
             )
             if temp is not None:
+                humidity_pct, pressure_hpa = self.state.outdoor_extras(self.sensor_max_age)
                 self.state.update(
                     outdoor_temp_c=temp,
                     outdoor_fetched_at=fetched_at,
                     outdoor_source="sensor",
+                    outdoor_humidity_pct=humidity_pct,
+                    outdoor_pressure_hpa=pressure_hpa,
                 )
                 return temp
 
@@ -240,6 +243,8 @@ class Orchestrator:
             outdoor_temp_c=cached.temperature_celsius,
             outdoor_fetched_at=cached.fetched_at,
             outdoor_source="weather",
+            outdoor_humidity_pct=None,
+            outdoor_pressure_hpa=None,
         )
         return cached.temperature_celsius
 

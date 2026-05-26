@@ -142,6 +142,18 @@
 	color: #8890b0;
 }
 
+.hb-outdoor-extras {
+	display: flex;
+	gap: 24px;
+	margin-bottom: 14px;
+}
+
+.hb-extra-item {
+	color: #8890b0;
+	font-size: 0.88em;
+	letter-spacing: 1px;
+}
+
 .hb-reason {
 	font-style: italic;
 	color: #8890b0;
