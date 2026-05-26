@@ -187,20 +187,19 @@ Module.register("MMM-HeatingBrain", {
 		);
 		wrap.appendChild(temps);
 
-		// Outdoor humidity and pressure — only shown when a BME280 sensor is live.
-		if (s.outdoor_humidity_pct != null || s.outdoor_pressure_hpa != null) {
-			const extras = document.createElement("div");
-			extras.className = "hb-outdoor-extras";
-			const humLine = document.createElement("span");
-			humLine.className = "hb-extra-item dimmed small";
-			humLine.textContent = "Humidity: " + this.formatHumidity(s.outdoor_humidity_pct);
-			const prsLine = document.createElement("span");
-			prsLine.className = "hb-extra-item dimmed small";
-			prsLine.textContent = "Pressure: " + this.formatPressure(s.outdoor_pressure_hpa);
-			extras.appendChild(humLine);
-			extras.appendChild(prsLine);
-			wrap.appendChild(extras);
-		}
+		// Outdoor humidity and pressure — always rendered; show "—" until the
+		// BME280 sensor posts (so the row's presence advertises what's coming).
+		const extras = document.createElement("div");
+		extras.className = "hb-outdoor-extras";
+		const humLine = document.createElement("span");
+		humLine.className = "hb-extra-item dimmed small";
+		humLine.textContent = "Humidity: " + this.formatHumidity(s.outdoor_humidity_pct);
+		const prsLine = document.createElement("span");
+		prsLine.className = "hb-extra-item dimmed small";
+		prsLine.textContent = "Pressure: " + this.formatPressure(s.outdoor_pressure_hpa);
+		extras.appendChild(humLine);
+		extras.appendChild(prsLine);
+		wrap.appendChild(extras);
 
 		if (this.config.showControls) {
 			const active = this.activeMode(s);
